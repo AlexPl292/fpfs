@@ -10,6 +10,13 @@ edition = "2018"
 fuse = "0.3.1"
 time = "0.1.44"
 libc = "0.2.51"
+tokio = { version = "0.3.5", features = ["fs", "sync", "rt-multi-thread"]}
+rand = "0.7.3"
+grammers-client = { git = "https://github.com/Lonami/grammers" }
+grammers-session = { git = "https://github.com/Lonami/grammers" }
+grammers-tl-types = { git = "https://github.com/Lonami/grammers" }
+simple_logger = "1.11.0"
+log = "0.4.8"
 
 [dev-dependencies]
-env_logger = "0.6.0"
+tokio = { version = "0.3", features = ["macros", "time", "fs", "rt"] }

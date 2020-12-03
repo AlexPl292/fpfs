@@ -1,8 +1,11 @@
 use std::ffi::OsStr;
 
-use fuse::{FileAttr, Filesystem, FileType, ReplyAttr, ReplyData, ReplyDirectory, ReplyEntry, Request};
+use fuse::{FileAttr, Filesystem, FileType, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEntry, ReplyWrite, Request};
 use libc::ENOENT;
 use time::Timespec;
+use rand::Rng;
+use crate::tg::TgConnection;
+use tokio::runtime::Runtime;
 
 const TTL: Timespec = Timespec { sec: 1, nsec: 0 };
 
@@ -45,11 +48,30 @@ const HELLO_TXT_ATTR: FileAttr = FileAttr {
 };
 
 
-pub struct Fpfs;
+pub struct Fpfs {
+    connection: TgConnection,
+    files: Option<Vec<String>>,
+}
+
+impl Fpfs {
+    pub fn new() -> Fpfs {
+
+        let api_id: i32 = env!("TG_ID").parse().expect("TG_ID invalid");
+        let api_hash = env!("TG_HASH").to_string();
+
+        let connection = TgConnection::connect(api_id, api_hash);
+        return Fpfs { connection, files: None }
+    }
+}
 
 impl Filesystem for Fpfs {
+
     fn lookup(&mut self, _req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
-        if parent == 1 && name.to_str() == Some("hello.txt") {
+        if self.files.is_none() {
+            let files = Runtime::new().unwrap().block_on(self.connection.get_list());
+            self.files = Some(files);
+        }
+        if parent == 1 && self.files.as_ref().unwrap().contains(&name.to_str().unwrap_or("~").to_string()) {
             reply.entry(&TTL, &HELLO_TXT_ATTR, 0);
         } else {
             reply.error(ENOENT);
@@ -72,22 +94,53 @@ impl Filesystem for Fpfs {
         }
     }
 
+    fn write(&mut self, _req: &Request, _ino: u64, _fh: u64, _offset: i64, _data: &[u8], _flags: u32, reply: ReplyWrite) {
+        reply.written(_data.len() as u32)
+    }
+
     fn readdir(&mut self, _req: &Request, ino: u64, _fh: u64, offset: i64, mut reply: ReplyDirectory) {
         if ino != 1 {
             reply.error(ENOENT);
             return;
         }
 
-        let entries = vec![
-            (1, FileType::Directory, "."),
-            (1, FileType::Directory, ".."),
-            (2, FileType::RegularFile, "hello.txt"),
+        let mut entries: Vec<(u64, FileType, String)> = vec![
+            (1, FileType::Directory, String::from(".")),
+            (1, FileType::Directory, String::from("..")),
         ];
+
+        if self.files.is_none() {
+            let files = Runtime::new().unwrap().block_on(self.connection.get_list());
+            self.files = Some(files);
+        }
+
+        for file in self.files.as_ref().unwrap() {
+            if (!file.is_empty()) {
+                entries.push((2, FileType::RegularFile, file.to_string()))
+            }
+        }
+
 
         for (i, entry) in entries.into_iter().enumerate().skip(offset as usize) {
             // i + 1 means the index of the next entry
-            reply.add(entry.0, (i + 1) as i64, entry.1, entry.2);
+            reply.add(entry.0, (i + 1) as i64, entry.1, entry.2.as_str());
         }
         reply.ok();
+    }
+
+    fn create(&mut self, _req: &Request, _parent: u64, _name: &OsStr, _mode: u32, _flags: u32, reply: ReplyCreate) {
+        let name = _name.to_str().unwrap();
+        let mut rng = rand::thread_rng();
+        self.connection.create_file(name);
+
+        match self.files {
+            Some(ref mut f) => {
+                f.push(name.to_string());
+            },
+            None => ()
+        }
+
+
+        reply.created(&TTL, &HELLO_TXT_ATTR, rng.gen(), rng.gen(), _flags);
     }
 }
