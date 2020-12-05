@@ -60,7 +60,7 @@ impl TgConnection {
             Some(data) => data,
             None => {
                 client_handle
-                    .send_message(peer, InputMessage::text("[META]"))
+                    .send_message(peer, InputMessage::text(META_CONSTANT))
                     .await.unwrap();
                 self.get_meta_message(&client_handle).await.unwrap()
             }
