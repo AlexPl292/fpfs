@@ -74,9 +74,9 @@ impl TgConnection {
 
         let mut messages = client_handle.search_messages(&peer);
 
-        while let Some(dialog) = messages.next().await.unwrap() {
-            if dialog.text().starts_with(META_CONSTANT) {
-                return Some((dialog.id(), dialog.text().to_string()));
+        while let Some(message) = messages.next().await.unwrap() {
+            if message.text().starts_with(META_CONSTANT) {
+                return Some((message.id(), message.text().to_string()));
             }
         }
 
