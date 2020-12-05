@@ -1,5 +1,3 @@
-use std::fmt::Error;
-
 use grammers_client::{Client, ClientHandle, Config, InputMessage};
 use grammers_session::Session;
 use grammers_tl_types as tl;
@@ -20,7 +18,7 @@ impl TgConnection {
     }
 
     #[tokio::main]
-    pub async fn create_file(&self, name: &str) -> Result<(), Error> {
+    pub async fn create_file(&self, name: &str) {
         let mut client_handle = self.get_connection().await;
         let peer_into = TgConnection::get_peer();
 
@@ -34,8 +32,6 @@ impl TgConnection {
             .edit_message(&peer_into, id, InputMessage::text(new_text))
             .await
             .unwrap();
-
-        Ok(())
     }
 
     // #[tokio::main]
