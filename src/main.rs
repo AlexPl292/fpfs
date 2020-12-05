@@ -2,12 +2,13 @@ use std::env;
 use std::ffi::OsStr;
 
 use crate::tg::TgConnection;
-use tokio::runtime;
-use simple_logger::SimpleLogger;
 use log;
+use simple_logger::SimpleLogger;
+use tokio::runtime;
 
 mod fpfs;
 mod tg;
+mod utils;
 
 async fn async_main() {
     let api_id: i32 = env!("TG_ID").parse().expect("TG_ID invalid");
@@ -18,11 +19,10 @@ async fn async_main() {
 
 fn main() {
     SimpleLogger::new()
-        .with_level(log::LevelFilter::Trace)
+        .with_level(log::LevelFilter::Debug)
         .init()
         .unwrap();
 
-    // env_logger::init();
     let mountpoint = "/Users/alex.plate/Downloads/test55";
 
     // async_main()
