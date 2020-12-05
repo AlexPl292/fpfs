@@ -1,6 +1,5 @@
 use std::ffi::OsStr;
 
-use crate::tg::TgConnection;
 use fuse::{
     FileAttr, FileType, Filesystem, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEntry,
     ReplyWrite, Request,
@@ -9,6 +8,17 @@ use libc::ENOENT;
 use rand::Rng;
 use time::Timespec;
 use tokio::runtime::Runtime;
+
+use crate::tg::TgConnection;
+
+/// Some readings:
+/// CS135 FUSE Documentation:
+/// - https://www.cs.hmc.edu/~geoff/classes/hmc.cs135.201001/homework/fuse/fuse_doc.html
+///
+///
+/// Small wiki about parameters:
+///   ino - the inode number
+///   fh - File handle id. File identifier, may be used instead of path.
 
 const TTL: Timespec = Timespec { sec: 1, nsec: 0 };
 
