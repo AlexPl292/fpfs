@@ -15,6 +15,8 @@ rand = "0.7.3"
 grammers-client = { git = "https://github.com/Lonami/grammers" }
 grammers-session = { git = "https://github.com/Lonami/grammers" }
 grammers-tl-types = { git = "https://github.com/Lonami/grammers" }
+grammers-mtsender = { git = "https://github.com/Lonami/grammers" }
+grammers-mtproto = { git = "https://github.com/Lonami/grammers" }
 simple_logger = "1.11.0"
 log = "0.4.8"
 

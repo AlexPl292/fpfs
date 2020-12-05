@@ -1,4 +1,6 @@
 use grammers_client::{Client, ClientHandle, Config, InputMessage};
+use grammers_mtproto::mtp::RpcError;
+use grammers_mtsender::InvocationError;
 use grammers_session::Session;
 use grammers_tl_types as tl;
 use tokio::task;
@@ -28,10 +30,19 @@ impl TgConnection {
 
         let new_text = format!("{}\n{}", text, name);
 
-        client_handle
-            .edit_message(&peer_into, id, InputMessage::text(new_text))
-            .await
-            .unwrap();
+        let edit_message_result = client_handle
+            .edit_message(&peer_into, id, new_text.as_str().into())
+            .await;
+
+        match edit_message_result {
+            Ok(_) => (),
+            Err(InvocationError::Rpc(RpcError { name, .. })) => {
+                if name == "MESSAGE_EDIT_TIME_EXPIRED" {
+                    self.resend_meta_message(id, &new_text, &mut client_handle, &peer_into).await;
+                }
+            },
+            Err(e) => panic!(e),
+        }
     }
 
     // #[tokio::main]
@@ -47,6 +58,20 @@ impl TgConnection {
         list.split("\n").map(|x| x.to_string()).collect()
     }
 
+    async fn resend_meta_message(
+        &self,
+        old_message_id: i32,
+        message: &str,
+        client_handler: &mut ClientHandle,
+        peer: &tl::enums::InputPeer,
+    ) -> i32 {
+        client_handler.delete_messages(None, &[old_message_id]).await.unwrap();
+
+        // TODO this method should return message instance
+        client_handler.send_message(peer, message.into()).await.unwrap();
+        self.get_meta_message(client_handler).await.unwrap().0
+    }
+
     async fn get_or_create_meta_message(
         &self,
         client_handle: &mut ClientHandle,
@@ -57,7 +82,7 @@ impl TgConnection {
             Some(data) => data,
             None => {
                 client_handle
-                    .send_message(peer, InputMessage::text(META_CONSTANT))
+                    .send_message(peer, META_CONSTANT.into())
                     .await
                     .unwrap();
                 self.get_meta_message(&client_handle).await.unwrap()
