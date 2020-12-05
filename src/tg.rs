@@ -32,7 +32,8 @@ impl TgConnection {
 
         client_handle
             .edit_message(&peer_into, id, InputMessage::text(new_text))
-            .await.unwrap();
+            .await
+            .unwrap();
 
         Ok(())
     }
@@ -61,7 +62,8 @@ impl TgConnection {
             None => {
                 client_handle
                     .send_message(peer, InputMessage::text(META_CONSTANT))
-                    .await.unwrap();
+                    .await
+                    .unwrap();
                 self.get_meta_message(&client_handle).await.unwrap()
             }
         }
