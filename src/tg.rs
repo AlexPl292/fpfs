@@ -1,8 +1,5 @@
-use std::env;
 use std::fmt::Error;
-use std::fs::read_to_string;
 
-use grammers_client::types::Entity;
 use grammers_client::{Client, ClientHandle, Config, InputMessage};
 use grammers_session::Session;
 use grammers_tl_types as tl;
@@ -35,7 +32,7 @@ impl TgConnection {
 
         client_handle
             .edit_message(&peer_into, id, InputMessage::text(new_text))
-            .await;
+            .await.unwrap();
 
         Ok(())
     }
@@ -64,7 +61,7 @@ impl TgConnection {
             None => {
                 client_handle
                     .send_message(peer, InputMessage::text("[META]"))
-                    .await;
+                    .await.unwrap();
                 self.get_meta_message(&client_handle).await.unwrap()
             }
         }
@@ -107,7 +104,7 @@ impl TgConnection {
             panic!("Panic")
         }
 
-        let mut client_handle = client.handle();
+        let client_handle = client.handle();
         task::spawn(async move { client.run_until_disconnected().await });
         client_handle
     }

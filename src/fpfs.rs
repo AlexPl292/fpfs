@@ -174,7 +174,7 @@ impl Filesystem for Fpfs {
     ) {
         let name = _name.to_str().unwrap();
         let mut rng = rand::thread_rng();
-        self.connection.create_file(name);
+        self.connection.create_file(name).unwrap();
 
         match self.files_cache {
             Some(ref mut f) => {
