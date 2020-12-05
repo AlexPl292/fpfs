@@ -38,9 +38,10 @@ impl TgConnection {
             Ok(_) => (),
             Err(InvocationError::Rpc(RpcError { name, .. })) => {
                 if name == "MESSAGE_EDIT_TIME_EXPIRED" {
-                    self.resend_meta_message(id, &new_text, &mut client_handle, &peer_into).await;
+                    self.resend_meta_message(id, &new_text, &mut client_handle, &peer_into)
+                        .await;
                 }
-            },
+            }
             Err(e) => panic!(e),
         }
     }
@@ -65,10 +66,16 @@ impl TgConnection {
         client_handler: &mut ClientHandle,
         peer: &tl::enums::InputPeer,
     ) -> i32 {
-        client_handler.delete_messages(None, &[old_message_id]).await.unwrap();
+        client_handler
+            .delete_messages(None, &[old_message_id])
+            .await
+            .unwrap();
 
         // TODO this method should return message instance
-        client_handler.send_message(peer, message.into()).await.unwrap();
+        client_handler
+            .send_message(peer, message.into())
+            .await
+            .unwrap();
         self.get_meta_message(client_handler).await.unwrap().0
     }
 
