@@ -5,7 +5,6 @@ use fuse::{
     ReplyWrite, Request,
 };
 use libc::ENOENT;
-use rand::Rng;
 use time::Timespec;
 use tokio::runtime::Runtime;
 
@@ -90,13 +89,13 @@ impl Fpfs {
 impl Filesystem for Fpfs {
     fn lookup(&mut self, _req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
         self.init_cache();
-        if parent == 1
-            && self
-                .files_cache
-                .as_ref()
-                .unwrap()
-                .contains(&name.to_str().unwrap_or("~").to_string())
-        {
+        let my_file_name = name.to_str().unwrap_or("~").to_string();
+        let contains = self
+            .files_cache
+            .as_ref()
+            .unwrap()
+            .contains(&my_file_name);
+        if parent == 1 && contains {
             reply.entry(&TTL, &HELLO_TXT_ATTR, 0);
         } else {
             reply.error(ENOENT);
@@ -183,7 +182,6 @@ impl Filesystem for Fpfs {
         reply: ReplyCreate,
     ) {
         let name = _name.to_str().unwrap();
-        let mut rng = rand::thread_rng();
         self.connection.create_file(name);
 
         match self.files_cache {
@@ -193,6 +191,6 @@ impl Filesystem for Fpfs {
             None => (),
         }
 
-        reply.created(&TTL, &HELLO_TXT_ATTR, rng.gen(), rng.gen(), _flags);
+        reply.created(&TTL, &HELLO_TXT_ATTR, 0, 0, _flags);
     }
 }

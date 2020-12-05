@@ -1,4 +1,4 @@
-use grammers_client::{Client, ClientHandle, Config, InputMessage};
+use grammers_client::{Client, ClientHandle, Config};
 use grammers_mtproto::mtp::RpcError;
 use grammers_mtsender::InvocationError;
 use grammers_session::Session;
