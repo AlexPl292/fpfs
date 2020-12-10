@@ -21,6 +21,12 @@ impl TgConnection {
 
     #[tokio::main]
     pub async fn create_file(&self, name: &str) {
+        let new_text = |text: String| format!("{}\n{}", text, name);
+
+        self.edit_meta_message(&new_text).await
+    }
+
+    async fn edit_meta_message(&self, f: &dyn Fn(String) -> String) {
         let mut client_handle = self.get_connection().await;
         let peer_into = TgConnection::get_peer();
 
@@ -28,7 +34,7 @@ impl TgConnection {
             .get_or_create_meta_message(&mut client_handle, &peer_into)
             .await;
 
-        let new_text = format!("{}\n{}", text, name);
+        let new_text = f(text);
 
         let edit_message_result = client_handle
             .edit_message(&peer_into, id, new_text.as_str().into())
