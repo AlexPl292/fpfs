@@ -1,4 +1,4 @@
-use grammers_client::{Client, ClientHandle, Config};
+use grammers_client::{Client, ClientHandle, Config, InputMessage};
 use grammers_mtproto::mtp::RpcError;
 use grammers_mtsender::InvocationError;
 use grammers_session::Session;
@@ -62,7 +62,42 @@ impl TgConnection {
             .await;
 
         let list = utils::crop_letters(&text, META_CONSTANT.len());
-        list.split("\n").map(|x| x.to_string()).collect()
+        list.split("\n")
+            .map(|x| x.split("|").collect::<Vec<&str>>()[0].to_string())
+            .collect()
+    }
+
+    #[tokio::main]
+    pub async fn write_to_file(&self, path: &str, file_name: &str) {
+        let mut client_handle = self.get_connection().await;
+        let peer_into = TgConnection::get_peer();
+
+        let res: tl::enums::InputFile = client_handle.upload_file(path).await.unwrap();
+
+        let message = InputMessage::text(path).file(res);
+        client_handle
+            .send_message(&peer_into, message)
+            .await
+            .unwrap();
+
+        let (id, _) = TgConnection::find_message_by_text(&client_handle, &|msg| msg == path)
+            .await
+            .unwrap();
+
+        let id_string = id.to_string();
+        client_handle
+            .send_message(&peer_into, id_string.as_str().into())
+            .await
+            .unwrap();
+
+        let (id, _) =
+            TgConnection::find_message_by_text(&client_handle, &|msg| msg == id_string.as_str())
+                .await
+                .unwrap();
+
+        let string = format!("{}|{}", file_name, id);
+        self.edit_meta_message(&|msg| msg.replace(file_name, string.as_str()))
+            .await;
     }
 
     async fn resend_meta_message(

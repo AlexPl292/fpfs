@@ -1,10 +1,13 @@
 use std::ffi::OsStr;
+use std::fs;
+use std::io::Write;
 
 use fuse::{
     FileAttr, FileType, Filesystem, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEntry,
     ReplyWrite, Request,
 };
 use libc::ENOENT;
+use rand::Rng;
 use time::Timespec;
 use tokio::runtime::Runtime;
 
@@ -132,6 +135,12 @@ impl Filesystem for Fpfs {
         _flags: u32,
         reply: ReplyWrite,
     ) {
+        let path = Fpfs::write_my_file(_data);
+
+        self.connection.write_to_file(path.as_str(), "another");
+
+        fs::remove_file(path.as_str());
+
         reply.written(_data.len() as u32)
     }
 
@@ -188,5 +197,17 @@ impl Filesystem for Fpfs {
         }
 
         reply.created(&TTL, &HELLO_TXT_ATTR, 0, 0, _flags);
+    }
+}
+
+impl Fpfs {
+    pub fn write_my_file(_data: &[u8]) -> String {
+        let mut rng = rand::thread_rng();
+        let x = rng.gen::<u32>();
+        let path = format!("/tmp/fpfs/{}", x);
+        let result = fs::File::create(path.as_str());
+        let mut file = result.unwrap();
+        file.write(_data).unwrap();
+        path
     }
 }
