@@ -104,12 +104,20 @@ impl TgConnection {
     }
 
     async fn get_meta_message(&self, client_handle: &ClientHandle) -> Option<(i32, String)> {
+        TgConnection::find_message_by_text(client_handle, &|msg| msg.starts_with(META_CONSTANT))
+            .await
+    }
+
+    async fn find_message_by_text(
+        client_handle: &ClientHandle,
+        filter: &dyn Fn(&str) -> bool,
+    ) -> Option<(i32, String)> {
         let peer = TgConnection::get_peer();
 
         let mut messages = client_handle.search_messages(&peer);
 
         while let Some(message) = messages.next().await.unwrap() {
-            if message.text().starts_with(META_CONSTANT) {
+            if filter(message.text()) {
                 return Some((message.id(), message.text().to_string()));
             }
         }
