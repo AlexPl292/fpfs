@@ -90,11 +90,7 @@ impl Filesystem for Fpfs {
     fn lookup(&mut self, _req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
         self.init_cache();
         let my_file_name = name.to_str().unwrap_or("~").to_string();
-        let contains = self
-            .files_cache
-            .as_ref()
-            .unwrap()
-            .contains(&my_file_name);
+        let contains = self.files_cache.as_ref().unwrap().contains(&my_file_name);
         if parent == 1 && contains {
             reply.entry(&TTL, &HELLO_TXT_ATTR, 0);
         } else {
