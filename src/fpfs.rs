@@ -47,7 +47,7 @@ const HELLO_TXT_CONTENT: &str = "Hello World!\n";
 
 const HELLO_TXT_ATTR: FileAttr = FileAttr {
     ino: 2,
-    size: 13,
+    size: 17,
     blocks: 1,
     atime: UNIX_EPOCH, // 1970-01-01 00:00:00
     mtime: UNIX_EPOCH,
@@ -119,7 +119,16 @@ impl Filesystem for Fpfs {
         reply: ReplyData,
     ) {
         if ino == 2 {
-            reply.data(&HELLO_TXT_CONTENT.as_bytes()[offset as usize..]);
+            let file_data = Runtime::new()
+                .unwrap()
+                .block_on(self.connection.read_file("another"));
+            match file_data {
+                Some(data) => {
+                    let data_array = &data[offset as usize..];
+                    reply.data(data_array)
+                }
+                None => reply.error(ENOENT),
+            }
         } else {
             reply.error(ENOENT);
         }

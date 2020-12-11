@@ -1,3 +1,4 @@
+use grammers_client::ext::MessageMediaExt;
 use grammers_client::{Client, ClientHandle, Config, InputMessage};
 use grammers_mtproto::mtp::RpcError;
 use grammers_mtsender::InvocationError;
@@ -50,6 +51,45 @@ impl TgConnection {
             }
             Err(e) => panic!(e),
         }
+    }
+
+    // #[tokio::main]
+    pub async fn read_file(&self, name: &str) -> Option<Vec<u8>> {
+        let mut client_handle = self.get_connection().await;
+
+        let (_, message) = self.get_meta_message(&client_handle).await?;
+
+        let name_with_separator = format!("{}|", name);
+        let found_file = message
+            .split("\n")
+            .find(|x| x.starts_with(name_with_separator.as_str()));
+        let meta_id = found_file?
+            .split("|")
+            .nth(1)
+            .map(|x| x.parse::<i32>())?
+            .ok()?;
+
+        let file_meta_message = client_handle
+            .get_messages_by_id(None, &[meta_id])
+            .await
+            .ok()?
+            .into_iter()
+            .nth(0)??;
+        let file_id: i32 = file_meta_message.text().parse().ok()?;
+        let file_message = client_handle
+            .get_messages_by_id(None, &[file_id])
+            .await
+            .ok()?
+            .into_iter()
+            .nth(0)??;
+
+        let media: tl::enums::MessageMedia = file_message.media()?;
+        let file_location: tl::enums::InputFileLocation = media.to_input_file()?;
+
+        let mut download_iter = client_handle.iter_download(file_location);
+        let file = download_iter.next().await.ok()??;
+
+        Some(file)
     }
 
     // #[tokio::main]
