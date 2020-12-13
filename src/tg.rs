@@ -6,6 +6,7 @@ use grammers_session::Session;
 use grammers_tl_types as tl;
 use tokio::task;
 
+use crate::types::{FileLink, MetaMessage, VERSION};
 use crate::utils;
 
 const META_CONSTANT: &'static str = "[META]";
@@ -22,20 +23,23 @@ impl TgConnection {
 
     #[tokio::main]
     pub async fn create_file(&self, name: &str) {
-        let new_text = |text: String| format!("{}\n{}", text, name);
+        let new_text =
+            |text: &mut MetaMessage| text.files.push(FileLink::new(name.to_string(), None));
 
         self.edit_meta_message(&new_text).await
     }
 
-    async fn edit_meta_message(&self, f: &dyn Fn(String) -> String) {
+    async fn edit_meta_message(&self, f: &dyn Fn(&mut MetaMessage) -> ()) {
         let mut client_handle = self.get_connection().await;
         let peer_into = TgConnection::get_peer();
 
-        let (id, text) = self
+        let (id, mut meta_message) = self
             .get_or_create_meta_message(&mut client_handle, &peer_into)
             .await;
 
-        let new_text = f(text);
+        f(&mut meta_message);
+
+        let new_text = TgConnection::make_meta_string_message(&meta_message);
 
         let edit_message_result = client_handle
             .edit_message(&peer_into, id, new_text.as_str().into())
@@ -59,15 +63,8 @@ impl TgConnection {
 
         let (_, message) = self.get_meta_message(&client_handle).await?;
 
-        let name_with_separator = format!("{}|", name);
-        let found_file = message
-            .split("\n")
-            .find(|x| x.starts_with(name_with_separator.as_str()));
-        let meta_id = found_file?
-            .split("|")
-            .nth(1)
-            .map(|x| x.parse::<i32>())?
-            .ok()?;
+        let found_file = message.files.iter().find(|x| x.name == name)?;
+        let meta_id = found_file.meta_file_link?;
 
         let file_meta_message = client_handle
             .get_messages_by_id(None, &[meta_id])
@@ -101,10 +98,7 @@ impl TgConnection {
             .get_or_create_meta_message(&mut client_handle, &peer_into)
             .await;
 
-        let list = utils::crop_letters(&text, META_CONSTANT.len());
-        list.split("\n")
-            .map(|x| x.split("|").collect::<Vec<&str>>()[0].to_string())
-            .collect()
+        text.files.iter().map(|x| x.name.to_string()).collect()
     }
 
     #[tokio::main]
@@ -135,9 +129,11 @@ impl TgConnection {
                 .await
                 .unwrap();
 
-        let string = format!("{}|{}", file_name, id);
-        self.edit_meta_message(&|msg| msg.replace(file_name, string.as_str()))
-            .await;
+        self.edit_meta_message(&|msg| {
+            msg.files
+                .push(FileLink::new(file_name.to_string(), Some(id)))
+        })
+        .await;
     }
 
     async fn resend_meta_message(
@@ -164,13 +160,18 @@ impl TgConnection {
         &self,
         client_handle: &mut ClientHandle,
         peer: &tl::enums::InputPeer,
-    ) -> (i32, String) {
+    ) -> (i32, MetaMessage) {
         let meta_message = self.get_meta_message(&client_handle).await;
         match meta_message {
             Some(data) => data,
             None => {
+                let meta_message = MetaMessage {
+                    version: VERSION.to_string(),
+                    files: vec![],
+                };
+                let initial_message = TgConnection::make_meta_string_message(&meta_message);
                 client_handle
-                    .send_message(peer, META_CONSTANT.into())
+                    .send_message(peer, initial_message.into())
                     .await
                     .unwrap();
                 self.get_meta_message(&client_handle).await.unwrap()
@@ -178,9 +179,19 @@ impl TgConnection {
         }
     }
 
-    async fn get_meta_message(&self, client_handle: &ClientHandle) -> Option<(i32, String)> {
-        TgConnection::find_message_by_text(client_handle, &|msg| msg.starts_with(META_CONSTANT))
-            .await
+    fn make_meta_string_message(meta: &MetaMessage) -> String {
+        let info = serde_json::to_string_pretty(&meta).unwrap();
+        format!("{}\n{}", META_CONSTANT, info)
+    }
+
+    async fn get_meta_message(&self, client_handle: &ClientHandle) -> Option<(i32, MetaMessage)> {
+        let (id, text) = TgConnection::find_message_by_text(client_handle, &|msg| {
+            msg.starts_with(META_CONSTANT)
+        })
+        .await?;
+        let info = utils::crop_letters(text.as_str(), META_CONSTANT.len());
+        let info: MetaMessage = serde_json::from_str(info).ok()?;
+        Some((id, info))
     }
 
     async fn find_message_by_text(

@@ -6,6 +6,7 @@ use simple_logger::SimpleLogger;
 mod fpfs;
 mod tg;
 mod utils;
+mod types;
 
 fn main() {
     SimpleLogger::new()

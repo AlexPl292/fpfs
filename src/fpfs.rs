@@ -43,8 +43,6 @@ const HELLO_DIR_ATTR: FileAttr = FileAttr {
     flags: 0,
 };
 
-const HELLO_TXT_CONTENT: &str = "Hello World!\n";
-
 const HELLO_TXT_ATTR: FileAttr = FileAttr {
     ino: 2,
     size: 17,
@@ -148,7 +146,7 @@ impl Filesystem for Fpfs {
 
         self.connection.write_to_file(path.as_str(), "another");
 
-        fs::remove_file(path.as_str());
+        fs::remove_file(path.as_str()).unwrap();
 
         reply.written(_data.len() as u32)
     }
