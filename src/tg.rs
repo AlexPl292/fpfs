@@ -8,6 +8,7 @@ use tokio::task;
 
 use crate::types::{FileLink, MetaMessage, VERSION};
 use crate::utils;
+use std::fs::File;
 
 const META_CONSTANT: &'static str = "[META]";
 
@@ -24,7 +25,7 @@ impl TgConnection {
     #[tokio::main]
     pub async fn create_file(&self, name: &str) {
         let new_text =
-            |text: &mut MetaMessage| text.files.push(FileLink::new(name.to_string(), None));
+            |text: &mut MetaMessage| text.files.push(FileLink::new(name.to_string(), None, 0));
 
         self.edit_meta_message(&new_text).await
     }
@@ -90,7 +91,7 @@ impl TgConnection {
     }
 
     // #[tokio::main]
-    pub async fn get_files_names(&self) -> Vec<String> {
+    pub async fn get_files_names(&self) -> Vec<FileLink> {
         let mut client_handle = self.get_connection().await;
         let peer_into = TgConnection::get_peer();
 
@@ -98,7 +99,7 @@ impl TgConnection {
             .get_or_create_meta_message(&mut client_handle, &peer_into)
             .await;
 
-        text.files.iter().map(|x| x.name.to_string()).collect()
+        text.files
     }
 
     #[tokio::main]
@@ -130,8 +131,13 @@ impl TgConnection {
                 .unwrap();
 
         self.edit_meta_message(&|msg| {
-            msg.files
-                .push(FileLink::new(file_name.to_string(), Some(id)))
+            msg.files.retain(|x| x.name != file_name.to_string());
+            let file = File::open(path).unwrap();
+            msg.files.push(FileLink::new(
+                file_name.to_string(),
+                Some(id),
+                file.metadata().unwrap().len(),
+            ))
         })
         .await;
     }

@@ -5,8 +5,8 @@ use simple_logger::SimpleLogger;
 
 mod fpfs;
 mod tg;
-mod utils;
 mod types;
+mod utils;
 
 fn main() {
     SimpleLogger::new()

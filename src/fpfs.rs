@@ -12,6 +12,7 @@ use time::Timespec;
 use tokio::runtime::Runtime;
 
 use crate::tg::TgConnection;
+use crate::types::FileLink;
 
 /// Some readings:
 /// CS135 FUSE Documentation:
@@ -62,7 +63,7 @@ const HELLO_TXT_ATTR: FileAttr = FileAttr {
 
 pub struct Fpfs {
     connection: TgConnection,
-    files_cache: Option<Vec<String>>,
+    files_cache: Option<Vec<FileLink>>,
 }
 
 impl Fpfs {
@@ -85,26 +86,79 @@ impl Fpfs {
             self.files_cache = Some(files);
         }
     }
+
+    fn make_attr(size: u64) -> FileAttr {
+        FileAttr {
+            size,
+            ..HELLO_TXT_ATTR
+        }
+    }
 }
 
 impl Filesystem for Fpfs {
+    fn destroy(&mut self, _req: &Request) {
+        println!("destroy");
+    }
+
     fn lookup(&mut self, _req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
         self.init_cache();
         let my_file_name = name.to_str().unwrap_or("~").to_string();
-        let contains = self.files_cache.as_ref().unwrap().contains(&my_file_name);
+        let contains = self
+            .files_cache
+            .as_ref()
+            .unwrap()
+            .iter()
+            .any(|x| x.name == my_file_name);
+        let i = self
+            .files_cache
+            .as_ref()
+            .unwrap()
+            .first()
+            .map(|x| x.size)
+            .unwrap_or(0);
+        let attr = Fpfs::make_attr(i);
         if parent == 1 && contains {
-            reply.entry(&TTL, &HELLO_TXT_ATTR, 0);
+            reply.entry(&TTL, &attr, 0);
         } else {
             reply.error(ENOENT);
         }
     }
 
     fn getattr(&mut self, _req: &Request, ino: u64, reply: ReplyAttr) {
+        self.init_cache();
+        let i = self
+            .files_cache
+            .as_ref()
+            .unwrap()
+            .first()
+            .map(|x| x.size)
+            .unwrap_or(0);
+        let attr = Fpfs::make_attr(i);
         match ino {
             1 => reply.attr(&TTL, &HELLO_DIR_ATTR),
-            2 => reply.attr(&TTL, &HELLO_TXT_ATTR),
+            2 => reply.attr(&TTL, &attr),
             _ => reply.error(ENOENT),
         }
+    }
+
+    fn setattr(
+        &mut self,
+        _req: &Request,
+        _ino: u64,
+        _mode: Option<u32>,
+        _uid: Option<u32>,
+        _gid: Option<u32>,
+        _size: Option<u64>,
+        _atime: Option<Timespec>,
+        _mtime: Option<Timespec>,
+        _fh: Option<u64>,
+        _crtime: Option<Timespec>,
+        _chgtime: Option<Timespec>,
+        _bkuptime: Option<Timespec>,
+        _flags: Option<u32>,
+        reply: ReplyAttr,
+    ) {
+        reply.attr(&TTL, &HELLO_TXT_ATTR);
     }
 
     fn read(
@@ -172,9 +226,7 @@ impl Filesystem for Fpfs {
         self.init_cache();
 
         for file in self.files_cache.as_ref().unwrap() {
-            if !file.is_empty() {
-                entries.push((2, FileType::RegularFile, file.to_string()))
-            }
+            entries.push((2, FileType::RegularFile, file.name.to_string()))
         }
 
         for (i, entry) in entries.into_iter().enumerate().skip(offset as usize) {
@@ -198,12 +250,12 @@ impl Filesystem for Fpfs {
 
         match self.files_cache {
             Some(ref mut f) => {
-                f.push(name.to_string());
+                f.push(FileLink::new(name.to_string(), None, 0));
             }
             None => (),
         }
 
-        reply.created(&TTL, &HELLO_TXT_ATTR, 0, 0, _flags);
+        reply.created(&TTL, &Fpfs::make_attr(0), 0, 0, _flags);
     }
 }
 

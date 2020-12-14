@@ -1,16 +1,21 @@
 extern crate fpfs;
 
-use fuse::{Filesystem, Session};
+use simple_logger::SimpleLogger;
 use std::ffi::OsStr;
+use std::fs;
 use std::fs::File;
 use std::path::PathBuf;
 use std::process::Command;
 use std::thread::sleep;
-use std::{fs, io};
 use tokio::time::Duration;
 
 #[test]
 fn create_empty_file() {
+    SimpleLogger::new()
+        .with_level(log::LevelFilter::Debug)
+        .init()
+        .unwrap();
+
     let tmpfile = tempfile::tempdir().unwrap();
 
     let options = ["-f", "-o", "fsname=fpfs"]
@@ -18,7 +23,7 @@ fn create_empty_file() {
         .map(|o| o.as_ref())
         .collect::<Vec<&OsStr>>();
     let filesystem = fpfs::Fpfs::new();
-    let _session = unsafe { fuse::spawn_mount(filesystem, &tmpfile, &options).unwrap() };
+    let session = unsafe { fuse::spawn_mount(filesystem, &tmpfile, &options).unwrap() };
 
     sleep(Duration::from_secs(1));
 
@@ -43,10 +48,12 @@ fn create_empty_file() {
     assert_eq!(file_list.len(), 1);
     assert_eq!(file_list[0].to_str().unwrap(), another_path);
 
-
+    fs::write(&another_path, "123").unwrap();
 
     Command::new("umount")
         .arg(path.to_str().unwrap())
         .spawn()
         .unwrap();
+
+    std::mem::drop(session);
 }
