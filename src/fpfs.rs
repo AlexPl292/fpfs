@@ -202,7 +202,7 @@ impl Filesystem for Fpfs {
     ) {
         let path = Fpfs::write_my_file(_data);
 
-        self.connection.write_to_file(path, "another");
+        self.connection.write_to_file(path, "another", _ino);
 
         self.files_cache
             .as_mut()
@@ -255,13 +255,20 @@ impl Filesystem for Fpfs {
         _flags: u32,
         reply: ReplyCreate,
     ) {
+        let next_ino = self
+            .files_cache
+            .as_ref()
+            .unwrap()
+            .iter()
+            .map(|x| x.ino)
+            .max()
+            .unwrap_or(2);
         let name = _name.to_str().unwrap();
-        self.connection.create_file(name);
+        let file_link = FileLink::new(name.to_string(), next_ino, None, 0);
+        self.connection.create_file(&file_link);
 
         match self.files_cache {
-            Some(ref mut f) => {
-                f.push(FileLink::new(name.to_string(), None, 0));
-            }
+            Some(ref mut f) => f.push(file_link),
             None => (),
         }
 

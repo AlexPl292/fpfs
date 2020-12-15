@@ -24,9 +24,8 @@ impl TgConnection {
     }
 
     #[tokio::main]
-    pub async fn create_file(&self, name: &str) {
-        let new_text =
-            |text: &mut MetaMessage| text.files.push(FileLink::new(name.to_string(), None, 0));
+    pub async fn create_file(&self, name: &FileLink) {
+        let new_text = |text: &mut MetaMessage| text.files.push(name.clone());
 
         self.edit_meta_message(&new_text).await
     }
@@ -104,7 +103,7 @@ impl TgConnection {
     }
 
     #[tokio::main]
-    pub async fn write_to_file(&self, tempfile: NamedTempFile, file_name: &str) {
+    pub async fn write_to_file(&self, tempfile: NamedTempFile, file_name: &str, ino: u64) {
         let mut client_handle = self.get_connection().await;
         let peer_into = TgConnection::get_peer();
 
@@ -138,6 +137,7 @@ impl TgConnection {
             let file = File::open(path).unwrap();
             msg.files.push(FileLink::new(
                 file_name.to_string(),
+                ino,
                 Some(id),
                 file.metadata().unwrap().len(),
             ))

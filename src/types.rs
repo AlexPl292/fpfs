@@ -8,18 +8,19 @@ pub struct MetaMessage {
     pub files: Vec<FileLink>,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct FileLink {
     pub name: String,
-    // pub ino: u64,
+    pub ino: u64,
     pub meta_file_link: Option<i32>,
     pub size: u64,
 }
 
 impl FileLink {
-    pub fn new(name: String, meta_file_link: Option<i32>, size: u64) -> FileLink {
+    pub fn new(name: String, ino: u64, meta_file_link: Option<i32>, size: u64) -> FileLink {
         FileLink {
             name,
+            ino,
             meta_file_link,
             size,
         }
