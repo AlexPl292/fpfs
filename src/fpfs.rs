@@ -6,12 +6,12 @@ use fuse::{
     ReplyWrite, Request,
 };
 use libc::ENOENT;
+use tempfile::NamedTempFile;
 use time::Timespec;
 use tokio::runtime::Runtime;
 
 use crate::tg::TgConnection;
 use crate::types::FileLink;
-use tempfile::NamedTempFile;
 
 /// Some readings:
 /// CS135 FUSE Documentation:
@@ -174,19 +174,15 @@ impl Filesystem for Fpfs {
         _size: u32,
         reply: ReplyData,
     ) {
-        if ino == 2 {
-            let file_data = Runtime::new()
-                .unwrap()
-                .block_on(self.connection.read_file("another"));
-            match file_data {
-                Some(data) => {
-                    let data_array = &data[offset as usize..];
-                    reply.data(data_array)
-                }
-                None => reply.error(ENOENT),
+        let file_data = Runtime::new()
+            .unwrap()
+            .block_on(self.connection.read_file(ino));
+        match file_data {
+            Some(data) => {
+                let data_array = &data[offset as usize..];
+                reply.data(data_array)
             }
-        } else {
-            reply.error(ENOENT);
+            None => reply.error(ENOENT),
         }
     }
 
@@ -202,13 +198,13 @@ impl Filesystem for Fpfs {
     ) {
         let path = Fpfs::write_my_file(_data);
 
-        self.connection.write_to_file(path, "another", _ino);
+        self.connection.write_to_file(path, _ino);
 
         self.files_cache
             .as_mut()
             .unwrap()
             .iter_mut()
-            .find(|x| x.name == "another")
+            .find(|x| x.ino == _ino)
             .unwrap()
             .size = _data.len() as u64;
 

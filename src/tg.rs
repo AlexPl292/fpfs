@@ -59,12 +59,12 @@ impl TgConnection {
     }
 
     // #[tokio::main]
-    pub async fn read_file(&self, name: &str) -> Option<Vec<u8>> {
+    pub async fn read_file(&self, ino: u64) -> Option<Vec<u8>> {
         let mut client_handle = self.get_connection().await;
 
         let (_, message) = self.get_meta_message(&client_handle).await?;
 
-        let found_file = message.files.iter().find(|x| x.name == name)?;
+        let found_file = message.files.iter().find(|x| x.ino == ino)?;
         let meta_id = found_file.meta_file_link?;
 
         let file_meta_message = client_handle
@@ -103,7 +103,7 @@ impl TgConnection {
     }
 
     #[tokio::main]
-    pub async fn write_to_file(&self, tempfile: NamedTempFile, file_name: &str, ino: u64) {
+    pub async fn write_to_file(&self, tempfile: NamedTempFile, ino: u64) {
         let mut client_handle = self.get_connection().await;
         let peer_into = TgConnection::get_peer();
 
@@ -133,7 +133,13 @@ impl TgConnection {
                 .unwrap();
 
         self.edit_meta_message(&|msg| {
-            msg.files.retain(|x| x.name != file_name.to_string());
+            let file_name = msg
+                .files
+                .iter()
+                .find(|x| x.ino == ino)
+                .map(|x| x.name.to_string())
+                .unwrap();
+            msg.files.retain(|x| x.ino != ino);
             let file = File::open(path).unwrap();
             msg.files.push(FileLink::new(
                 file_name.to_string(),
