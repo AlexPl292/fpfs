@@ -1,5 +1,4 @@
 use std::ffi::OsStr;
-use std::fs;
 use std::io::Write;
 
 use fuse::{
@@ -7,12 +6,12 @@ use fuse::{
     ReplyWrite, Request,
 };
 use libc::ENOENT;
-use rand::Rng;
 use time::Timespec;
 use tokio::runtime::Runtime;
 
 use crate::tg::TgConnection;
 use crate::types::FileLink;
+use tempfile::NamedTempFile;
 
 /// Some readings:
 /// CS135 FUSE Documentation:
@@ -203,9 +202,7 @@ impl Filesystem for Fpfs {
     ) {
         let path = Fpfs::write_my_file(_data);
 
-        self.connection.write_to_file(path.as_str(), "another");
-
-        fs::remove_file(path.as_str()).unwrap();
+        self.connection.write_to_file(path, "another");
 
         self.files_cache
             .as_mut()
@@ -273,13 +270,9 @@ impl Filesystem for Fpfs {
 }
 
 impl Fpfs {
-    pub fn write_my_file(_data: &[u8]) -> String {
-        let mut rng = rand::thread_rng();
-        let x = rng.gen::<u32>();
-        let path = format!("/tmp/fpfs/{}", x);
-        let result = fs::File::create(path.as_str());
-        let mut file = result.unwrap();
-        file.write(_data).unwrap();
-        path
+    pub fn write_my_file(_data: &[u8]) -> NamedTempFile {
+        let mut temp_file = NamedTempFile::new().unwrap();
+        temp_file.write(_data).unwrap();
+        temp_file
     }
 }

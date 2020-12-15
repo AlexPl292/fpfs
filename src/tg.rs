@@ -9,6 +9,7 @@ use tokio::task;
 use crate::types::{FileLink, MetaMessage, VERSION};
 use crate::utils;
 use std::fs::File;
+use tempfile::NamedTempFile;
 
 const META_CONSTANT: &'static str = "[META]";
 
@@ -103,9 +104,11 @@ impl TgConnection {
     }
 
     #[tokio::main]
-    pub async fn write_to_file(&self, path: &str, file_name: &str) {
+    pub async fn write_to_file(&self, tempfile: NamedTempFile, file_name: &str) {
         let mut client_handle = self.get_connection().await;
         let peer_into = TgConnection::get_peer();
+
+        let path = tempfile.path().to_str().unwrap();
 
         let res: tl::enums::InputFile = client_handle.upload_file(path).await.unwrap();
 
