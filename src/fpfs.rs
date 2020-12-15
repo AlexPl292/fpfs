@@ -207,6 +207,14 @@ impl Filesystem for Fpfs {
 
         fs::remove_file(path.as_str()).unwrap();
 
+        self.files_cache
+            .as_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|x| x.name == "another")
+            .unwrap()
+            .size = _data.len() as u64;
+
         reply.written(_data.len() as u32)
     }
 

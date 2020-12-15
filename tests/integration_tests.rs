@@ -51,6 +51,11 @@ fn create_empty_file() {
 
     fs::write(&another_path, "123").unwrap();
 
+    let bytes = fs::read(&another_path).unwrap();
+    let result = String::from_utf8(bytes).unwrap();
+
+    assert_eq!("123", result);
+
     Command::new("umount")
         .arg(path.to_str().unwrap())
         .spawn()
