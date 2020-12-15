@@ -19,8 +19,8 @@ use tempfile::NamedTempFile;
 ///
 ///
 /// Small wiki about parameters:
-///   ino - the inode number
-///   fh - File handle id. File identifier, may be used instead of path.
+///   - ino - the inode number
+///   - fh - File handle id. File identifier, may be used instead of path.
 
 const TTL: Timespec = Timespec { sec: 1, nsec: 0 };
 
