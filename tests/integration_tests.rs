@@ -23,6 +23,7 @@ fn create_empty_file() {
         .map(|o| o.as_ref())
         .collect::<Vec<&OsStr>>();
     let filesystem = fpfs::Fpfs::new();
+    filesystem.remove_meta();
     let session = unsafe { fuse::spawn_mount(filesystem, &tmpfile, &options).unwrap() };
 
     sleep(Duration::from_secs(1));

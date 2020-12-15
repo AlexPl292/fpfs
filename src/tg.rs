@@ -190,6 +190,16 @@ impl TgConnection {
         format!("{}\n{}", META_CONSTANT, info)
     }
 
+    #[tokio::main]
+    pub async fn remove_meta(&self) {
+        let mut client_handle = self.get_connection().await;
+
+        let meta_message = self.get_meta_message(&client_handle).await;
+        if let Some((id, _)) = meta_message {
+            client_handle.delete_messages(None, &[id]).await.unwrap();
+        }
+    }
+
     async fn get_meta_message(&self, client_handle: &ClientHandle) -> Option<(i32, MetaMessage)> {
         let (id, text) = TgConnection::find_message_by_text(client_handle, &|msg| {
             msg.starts_with(META_CONSTANT)

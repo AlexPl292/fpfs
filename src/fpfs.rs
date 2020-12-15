@@ -93,6 +93,11 @@ impl Fpfs {
             ..HELLO_TXT_ATTR
         }
     }
+
+    #[allow(dead_code)]
+    pub fn remove_meta(&self) {
+        self.connection.remove_meta();
+    }
 }
 
 impl Filesystem for Fpfs {
