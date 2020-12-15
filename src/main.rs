@@ -14,7 +14,7 @@ fn main() {
         .init()
         .unwrap();
 
-    let mountpoint = "/Users/alex.plate/Downloads/test58";
+    let mountpoint = "/Users/alex.plate/Downloads/test75";
 
     let options = ["-f", "-o", "fsname=fpfs"]
         .iter()
