@@ -15,18 +15,16 @@ pub struct MetaMessage {
 pub struct FileLink {
     pub name: String,
     pub meta_file_link: Option<i32>,
-    pub size: u64,
 
     #[serde(with = "FileAttrDef")]
     pub attr: FileAttr,
 }
 
 impl FileLink {
-    pub fn new(name: String, meta_file_link: Option<i32>, size: u64, attr: FileAttr) -> FileLink {
+    pub fn new(name: String, meta_file_link: Option<i32>, attr: FileAttr) -> FileLink {
         FileLink {
             name,
             meta_file_link,
-            size,
             attr,
         }
     }

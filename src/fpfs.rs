@@ -119,7 +119,7 @@ impl Filesystem for Fpfs {
             .as_ref()
             .unwrap()
             .first()
-            .map(|x| x.size)
+            .map(|x| x.attr.size)
             .unwrap_or(0);
         let ino = self
             .files_cache
@@ -143,7 +143,7 @@ impl Filesystem for Fpfs {
             .as_ref()
             .unwrap()
             .first()
-            .map(|x| x.size)
+            .map(|x| x.attr.size)
             .unwrap_or(0);
         let attr = Fpfs::make_attr(i, ino);
         match ino {
@@ -214,6 +214,7 @@ impl Filesystem for Fpfs {
             .iter_mut()
             .find(|x| x.attr.ino == _ino)
             .unwrap()
+            .attr
             .size = _data.len() as u64;
 
         reply.written(_data.len() as u32)
@@ -269,7 +270,7 @@ impl Filesystem for Fpfs {
             .unwrap_or(2);
         let name = _name.to_str().unwrap();
         let attr = Fpfs::make_attr(0, next_ino);
-        let file_link = FileLink::new(name.to_string(), None, 0, attr.clone());
+        let file_link = FileLink::new(name.to_string(), None, attr.clone());
         self.connection.create_file(&file_link);
 
         match self.files_cache {
