@@ -14,7 +14,6 @@ pub struct MetaMessage {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct FileLink {
     pub name: String,
-    pub ino: u64,
     pub meta_file_link: Option<i32>,
     pub size: u64,
 
@@ -23,10 +22,9 @@ pub struct FileLink {
 }
 
 impl FileLink {
-    pub fn new(name: String, ino: u64, meta_file_link: Option<i32>, size: u64, attr: FileAttr) -> FileLink {
+    pub fn new(name: String, meta_file_link: Option<i32>, size: u64, attr: FileAttr) -> FileLink {
         FileLink {
             name,
-            ino,
             meta_file_link,
             size,
             attr,

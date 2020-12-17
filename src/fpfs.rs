@@ -86,9 +86,10 @@ impl Fpfs {
         }
     }
 
-    fn make_attr(size: u64) -> FileAttr {
+    fn make_attr(size: u64, ino: u64) -> FileAttr {
         FileAttr {
             size,
+            ino,
             ..HELLO_TXT_ATTR
         }
     }
@@ -120,7 +121,14 @@ impl Filesystem for Fpfs {
             .first()
             .map(|x| x.size)
             .unwrap_or(0);
-        let attr = Fpfs::make_attr(i);
+        let ino = self
+            .files_cache
+            .as_ref()
+            .unwrap()
+            .first()
+            .map(|x| x.attr.ino)
+            .unwrap_or(2);
+        let attr = Fpfs::make_attr(i, ino);
         if parent == 1 && contains {
             reply.entry(&TTL, &attr, 0);
         } else {
@@ -137,7 +145,7 @@ impl Filesystem for Fpfs {
             .first()
             .map(|x| x.size)
             .unwrap_or(0);
-        let attr = Fpfs::make_attr(i);
+        let attr = Fpfs::make_attr(i, ino);
         match ino {
             1 => reply.attr(&TTL, &HELLO_DIR_ATTR),
             2 => reply.attr(&TTL, &attr),
@@ -204,7 +212,7 @@ impl Filesystem for Fpfs {
             .as_mut()
             .unwrap()
             .iter_mut()
-            .find(|x| x.ino == _ino)
+            .find(|x| x.attr.ino == _ino)
             .unwrap()
             .size = _data.len() as u64;
 
@@ -256,12 +264,12 @@ impl Filesystem for Fpfs {
             .as_ref()
             .unwrap()
             .iter()
-            .map(|x| x.ino)
+            .map(|x| x.attr.ino)
             .max()
             .unwrap_or(2);
         let name = _name.to_str().unwrap();
-        let attr = Fpfs::make_attr(0);
-        let file_link = FileLink::new(name.to_string(), next_ino, None, 0, attr.clone());
+        let attr = Fpfs::make_attr(0, next_ino);
+        let file_link = FileLink::new(name.to_string(), None, 0, attr.clone());
         self.connection.create_file(&file_link);
 
         match self.files_cache {

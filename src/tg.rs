@@ -64,7 +64,7 @@ impl TgConnection {
 
         let (_, message) = self.get_meta_message(&client_handle).await?;
 
-        let found_file = message.files.iter().find(|x| x.ino == ino)?;
+        let found_file = message.files.iter().find(|x| x.attr.ino == ino)?;
         let meta_id = found_file.meta_file_link?;
 
         let file_meta_message = client_handle
@@ -136,20 +136,19 @@ impl TgConnection {
             let file_name = msg
                 .files
                 .iter()
-                .find(|x| x.ino == ino)
+                .find(|x| x.attr.ino == ino)
                 .map(|x| x.name.to_string())
                 .unwrap();
             let attr = msg
                 .files
                 .iter()
-                .find(|x| x.ino == ino)
+                .find(|x| x.attr.ino == ino)
                 .map(|x| x.attr)
                 .unwrap();
-            msg.files.retain(|x| x.ino != ino);
+            msg.files.retain(|x| x.attr.ino != ino);
             let file = File::open(path).unwrap();
             msg.files.push(FileLink::new(
                 file_name.to_string(),
-                ino,
                 Some(id),
                 file.metadata().unwrap().len(),
                 attr,
