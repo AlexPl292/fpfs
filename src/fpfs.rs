@@ -114,23 +114,9 @@ impl Filesystem for Fpfs {
             .unwrap()
             .iter()
             .any(|x| x.name == my_file_name);
-        let i = self
-            .files_cache
-            .as_ref()
-            .unwrap()
-            .first()
-            .map(|x| x.attr.size)
-            .unwrap_or(0);
-        let ino = self
-            .files_cache
-            .as_ref()
-            .unwrap()
-            .first()
-            .map(|x| x.attr.ino)
-            .unwrap_or(2);
-        let attr = Fpfs::make_attr(i, ino);
-        if parent == 1 && contains {
-            reply.entry(&TTL, &attr, 0);
+        let attr = self.files_cache.as_ref().unwrap().first().map(|x| x.attr);
+        if parent == 1 && contains && attr.is_some() {
+            reply.entry(&TTL, &attr.unwrap(), 0);
         } else {
             reply.error(ENOENT);
         }
@@ -138,17 +124,16 @@ impl Filesystem for Fpfs {
 
     fn getattr(&mut self, _req: &Request, ino: u64, reply: ReplyAttr) {
         self.init_cache();
-        let i = self
-            .files_cache
-            .as_ref()
-            .unwrap()
-            .first()
-            .map(|x| x.attr.size)
-            .unwrap_or(0);
-        let attr = Fpfs::make_attr(i, ino);
+        let attr = self.files_cache.as_ref().unwrap().first().map(|x| x.attr);
         match ino {
             1 => reply.attr(&TTL, &HELLO_DIR_ATTR),
-            2 => reply.attr(&TTL, &attr),
+            2 => {
+                if let Some(data) = attr {
+                    reply.attr(&TTL, &data)
+                } else {
+                    reply.error(ENOENT)
+                }
+            },
             _ => reply.error(ENOENT),
         }
     }
