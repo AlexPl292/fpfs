@@ -148,11 +148,8 @@ impl TgConnection {
             let file = File::open(path).unwrap();
             attr.size = file.metadata().unwrap().len();
             msg.files.retain(|x| x.attr.ino != ino);
-            msg.files.push(FileLink::new(
-                file_name.to_string(),
-                Some(id),
-                attr,
-            ))
+            msg.files
+                .push(FileLink::new(file_name.to_string(), Some(id), attr))
         })
         .await;
     }

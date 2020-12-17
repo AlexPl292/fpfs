@@ -3,11 +3,11 @@ use std::ffi::OsStr;
 use log;
 use simple_logger::SimpleLogger;
 
+mod external_serialization;
 mod fpfs;
 mod tg;
 mod types;
 mod utils;
-mod external_serialization;
 
 fn main() {
     SimpleLogger::new()
