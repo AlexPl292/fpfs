@@ -139,6 +139,12 @@ impl TgConnection {
                 .find(|x| x.ino == ino)
                 .map(|x| x.name.to_string())
                 .unwrap();
+            let attr = msg
+                .files
+                .iter()
+                .find(|x| x.ino == ino)
+                .map(|x| x.attr)
+                .unwrap();
             msg.files.retain(|x| x.ino != ino);
             let file = File::open(path).unwrap();
             msg.files.push(FileLink::new(
@@ -146,6 +152,7 @@ impl TgConnection {
                 ino,
                 Some(id),
                 file.metadata().unwrap().len(),
+                attr,
             ))
         })
         .await;

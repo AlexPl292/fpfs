@@ -7,6 +7,7 @@ mod fpfs;
 mod tg;
 mod types;
 mod utils;
+mod external_serialization;
 
 fn main() {
     SimpleLogger::new()

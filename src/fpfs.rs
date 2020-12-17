@@ -260,7 +260,8 @@ impl Filesystem for Fpfs {
             .max()
             .unwrap_or(2);
         let name = _name.to_str().unwrap();
-        let file_link = FileLink::new(name.to_string(), next_ino, None, 0);
+        let attr = Fpfs::make_attr(0);
+        let file_link = FileLink::new(name.to_string(), next_ino, None, 0, attr.clone());
         self.connection.create_file(&file_link);
 
         match self.files_cache {
@@ -268,7 +269,7 @@ impl Filesystem for Fpfs {
             None => (),
         }
 
-        reply.created(&TTL, &Fpfs::make_attr(0), 0, 0, _flags);
+        reply.created(&TTL, &attr, 0, 0, _flags);
     }
 }
 
