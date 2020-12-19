@@ -108,33 +108,36 @@ impl Filesystem for Fpfs {
     fn lookup(&mut self, _req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
         self.init_cache();
         let my_file_name = name.to_str().unwrap_or("~").to_string();
-        let contains = self
+        let found_file = self
             .files_cache
             .as_ref()
             .unwrap()
             .iter()
-            .any(|x| x.name == my_file_name);
-        let attr = self.files_cache.as_ref().unwrap().first().map(|x| x.attr);
-        if parent == 1 && contains && attr.is_some() {
-            reply.entry(&TTL, &attr.unwrap(), 0);
+            .find(|x| x.name == my_file_name);
+        if parent == 1 && found_file.is_some() {
+            reply.entry(&TTL, &found_file.unwrap().attr, 0);
         } else {
             reply.error(ENOENT);
         }
     }
 
     fn getattr(&mut self, _req: &Request, ino: u64, reply: ReplyAttr) {
-        self.init_cache();
-        let attr = self.files_cache.as_ref().unwrap().first().map(|x| x.attr);
         match ino {
             1 => reply.attr(&TTL, &HELLO_DIR_ATTR),
-            2 => {
+            _ => {
+                self.init_cache();
+                let attr = self
+                    .files_cache
+                    .as_ref()
+                    .unwrap()
+                    .iter()
+                    .find(|x| x.attr.ino == ino);
                 if let Some(data) = attr {
-                    reply.attr(&TTL, &data)
+                    reply.attr(&TTL, &data.attr)
                 } else {
                     reply.error(ENOENT)
                 }
-            },
-            _ => reply.error(ENOENT),
+            }
         }
     }
 
@@ -226,7 +229,7 @@ impl Filesystem for Fpfs {
         self.init_cache();
 
         for file in self.files_cache.as_ref().unwrap() {
-            entries.push((2, FileType::RegularFile, file.name.to_string()))
+            entries.push((file.attr.ino, FileType::RegularFile, file.name.to_string()))
         }
 
         for (i, entry) in entries.into_iter().enumerate().skip(offset as usize) {
