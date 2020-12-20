@@ -111,10 +111,6 @@ impl Fpfs {
 }
 
 impl Filesystem for Fpfs {
-    fn destroy(&mut self, _req: &Request) {
-        println!("destroy");
-    }
-
     fn lookup(&mut self, _req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
         let my_file_name = name.to_str().unwrap_or("~").to_string();
         let found_file = self.get_cache().iter().find(|x| x.name == my_file_name);
@@ -183,25 +179,25 @@ impl Filesystem for Fpfs {
     fn write(
         &mut self,
         _req: &Request,
-        _ino: u64,
+        ino: u64,
         _fh: u64,
         _offset: i64,
-        _data: &[u8],
+        data: &[u8],
         _flags: u32,
         reply: ReplyWrite,
     ) {
-        let path = Fpfs::write_my_file(_data);
+        let path = Fpfs::write_my_file(data);
 
-        self.connection.write_to_file(path, _ino);
+        self.connection.write_to_file(path, ino);
 
         self.get_cache_mut()
             .iter_mut()
-            .find(|x| x.attr.ino == _ino)
+            .find(|x| x.attr.ino == ino)
             .unwrap()
             .attr
-            .size = _data.len() as u64;
+            .size = data.len() as u64;
 
-        reply.written(_data.len() as u32)
+        reply.written(data.len() as u32)
     }
 
     fn readdir(
@@ -237,9 +233,9 @@ impl Filesystem for Fpfs {
         &mut self,
         _req: &Request,
         _parent: u64,
-        _name: &OsStr,
+        name: &OsStr,
         _mode: u32,
-        _flags: u32,
+        flags: u32,
         reply: ReplyCreate,
     ) {
         let next_ino = self
@@ -248,9 +244,9 @@ impl Filesystem for Fpfs {
             .map(|x| x.attr.ino)
             .max()
             .unwrap_or(2);
-        let name = _name.to_str().unwrap();
+        let file_name = name.to_str().unwrap().to_string();
         let attr = Fpfs::make_attr(0, next_ino);
-        let file_link = FileLink::new(name.to_string(), None, attr.clone());
+        let file_link = FileLink::new(file_name, None, attr.clone());
         self.connection.create_file(&file_link);
 
         match self.files_cache {
@@ -258,14 +254,14 @@ impl Filesystem for Fpfs {
             None => (),
         }
 
-        reply.created(&TTL, &attr, 0, 0, _flags);
+        reply.created(&TTL, &attr, 0, 0, flags);
     }
 }
 
 impl Fpfs {
-    pub fn write_my_file(_data: &[u8]) -> NamedTempFile {
+    pub fn write_my_file(data: &[u8]) -> NamedTempFile {
         let mut temp_file = NamedTempFile::new().unwrap();
-        temp_file.write(_data).unwrap();
+        temp_file.write(data).unwrap();
         temp_file
     }
 }
