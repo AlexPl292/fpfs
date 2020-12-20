@@ -77,6 +77,16 @@ impl Fpfs {
         };
     }
 
+    fn get_cache(&mut self) -> &Vec<FileLink> {
+        self.init_cache();
+        self.files_cache.as_ref().unwrap()
+    }
+
+    fn get_cache_mut(&mut self) -> &mut Vec<FileLink> {
+        self.init_cache();
+        self.files_cache.as_mut().unwrap()
+    }
+
     fn init_cache(&mut self) {
         if self.files_cache.is_none() {
             let files = Runtime::new()
@@ -106,14 +116,8 @@ impl Filesystem for Fpfs {
     }
 
     fn lookup(&mut self, _req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
-        self.init_cache();
         let my_file_name = name.to_str().unwrap_or("~").to_string();
-        let found_file = self
-            .files_cache
-            .as_ref()
-            .unwrap()
-            .iter()
-            .find(|x| x.name == my_file_name);
+        let found_file = self.get_cache().iter().find(|x| x.name == my_file_name);
         if parent == 1 && found_file.is_some() {
             reply.entry(&TTL, &found_file.unwrap().attr, 0);
         } else {
@@ -125,13 +129,7 @@ impl Filesystem for Fpfs {
         match ino {
             1 => reply.attr(&TTL, &HELLO_DIR_ATTR),
             _ => {
-                self.init_cache();
-                let attr = self
-                    .files_cache
-                    .as_ref()
-                    .unwrap()
-                    .iter()
-                    .find(|x| x.attr.ino == ino);
+                let attr = self.get_cache().iter().find(|x| x.attr.ino == ino);
                 if let Some(data) = attr {
                     reply.attr(&TTL, &data.attr)
                 } else {
@@ -196,9 +194,7 @@ impl Filesystem for Fpfs {
 
         self.connection.write_to_file(path, _ino);
 
-        self.files_cache
-            .as_mut()
-            .unwrap()
+        self.get_cache_mut()
             .iter_mut()
             .find(|x| x.attr.ino == _ino)
             .unwrap()
@@ -226,9 +222,7 @@ impl Filesystem for Fpfs {
             (1, FileType::Directory, String::from("..")),
         ];
 
-        self.init_cache();
-
-        for file in self.files_cache.as_ref().unwrap() {
+        for file in self.get_cache() {
             entries.push((file.attr.ino, FileType::RegularFile, file.name.to_string()))
         }
 
@@ -249,9 +243,7 @@ impl Filesystem for Fpfs {
         reply: ReplyCreate,
     ) {
         let next_ino = self
-            .files_cache
-            .as_ref()
-            .unwrap()
+            .get_cache()
             .iter()
             .map(|x| x.attr.ino)
             .max()
