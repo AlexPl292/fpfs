@@ -243,7 +243,7 @@ impl Filesystem for Fpfs {
             .iter()
             .map(|x| x.attr.ino)
             .max()
-            .unwrap_or(2);
+            .unwrap_or(2) + 1;
         let file_name = name.to_str().unwrap().to_string();
         let attr = Fpfs::make_attr(0, next_ino);
         let file_link = FileLink::new(file_name, None, attr.clone());
