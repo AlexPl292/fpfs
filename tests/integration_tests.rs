@@ -4,7 +4,7 @@ use simple_logger::SimpleLogger;
 use std::ffi::OsStr;
 use std::fs;
 use std::fs::File;
-use std::path::PathBuf;
+use std::path::{PathBuf, Path};
 use std::process::Command;
 use std::thread::sleep;
 use tokio::time::Duration;
@@ -37,24 +37,8 @@ fn create_empty_file() {
 
     assert!(file_list.is_empty());
 
-    let another_path = format!("{}/{}", path.as_os_str().to_str().unwrap(), "another");
-    File::create(&another_path).unwrap();
-
-    let file_list = fs::read_dir(path)
-        .unwrap()
-        .into_iter()
-        .map(|x| x.unwrap().path())
-        .collect::<Vec<PathBuf>>();
-
-    assert_eq!(file_list.len(), 1);
-    assert_eq!(file_list[0].to_str().unwrap(), another_path);
-
-    fs::write(&another_path, "123").unwrap();
-
-    let bytes = fs::read(&another_path).unwrap();
-    let result = String::from_utf8(bytes).unwrap();
-
-    assert_eq!("123", result);
+    file_loop(path, "another", 0, "123");
+    file_loop(path, "another_one_file", 1, "456");
 
     Command::new("umount")
         .arg(path.to_str().unwrap())
@@ -63,3 +47,25 @@ fn create_empty_file() {
 
     std::mem::drop(session);
 }
+
+fn file_loop(path: &Path, file_name: &str, amount_of_existing_files: usize, content: &str) {
+    let another_path = format!("{}/{}", path.as_os_str().to_str().unwrap(), file_name);
+    File::create(&another_path).unwrap();
+
+    let file_list = fs::read_dir(path)
+        .unwrap()
+        .into_iter()
+        .map(|x| x.unwrap().path())
+        .collect::<Vec<PathBuf>>();
+
+    assert_eq!(file_list.len(), amount_of_existing_files + 1);
+    assert!(file_list.iter().map(|x| x.to_str().unwrap()).any(|x| x == another_path));
+
+    fs::write(&another_path, content).unwrap();
+
+    let bytes = fs::read(&another_path).unwrap();
+    let result = String::from_utf8(bytes).unwrap();
+
+    assert_eq!(content, result);
+}
+
