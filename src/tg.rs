@@ -30,7 +30,7 @@ impl TgConnection {
         let mut client_handle = self.get_connection().await;
         let peer_into = TgConnection::get_peer();
 
-        let new_file_link = FileLink::new(name.to_string(), attr.clone());
+        let new_file_link = FileLink::new_file(name.to_string(), attr.clone());
 
         let attr_message = serde_json::to_string_pretty(&new_file_link).unwrap();
         let message: InputMessage = attr_message.into();

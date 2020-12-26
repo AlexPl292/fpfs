@@ -251,7 +251,7 @@ impl Filesystem for Fpfs {
             + 1;
         let file_name = name.to_str().unwrap().to_string();
         let attr = Fpfs::make_attr(0, next_ino);
-        let file_link = FileLink::new(file_name.clone(), attr.clone());
+        let file_link = FileLink::new_file(file_name.clone(), attr.clone());
         self.connection
             .create_file(file_name.as_str(), next_ino, &attr);
 
