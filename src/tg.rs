@@ -9,7 +9,7 @@ use grammers_tl_types as tl;
 use tempfile::NamedTempFile;
 use tokio::task;
 
-use crate::tg_tools::{edit_or_recreate, last_message, resend_message};
+use crate::tg_tools::{edit_or_recreate, get_message, last_message, resend_message};
 use crate::types::{FileLink, MetaMessage, VERSION};
 use crate::utils;
 
@@ -26,7 +26,20 @@ impl TgConnection {
     }
 
     #[tokio::main]
-    pub async fn create_file(&self, name: &str, ino: u64, attr: &FileAttr) {
+    pub async fn check_or_init_meta(&self, root_attr: &FileAttr) {
+        let mut client_handle = self.get_connection().await;
+        let peer_into = TgConnection::get_peer();
+
+        let (_, meta) = self
+            .get_or_create_meta_message(&mut client_handle, &peer_into)
+            .await;
+        if meta.files.is_empty() {
+            self.do_create_dir("", root_attr.ino, None, root_attr).await;
+        }
+    }
+
+    #[tokio::main]
+    pub async fn create_file(&self, name: &str, ino: u64, parent: u64, attr: &FileAttr) {
         let mut client_handle = self.get_connection().await;
         let peer_into = TgConnection::get_peer();
 
@@ -41,14 +54,48 @@ impl TgConnection {
         let attr_message_id = last_message(&mut client_handle, &peer_into).await;
 
         let new_text = |text: &mut MetaMessage| {
-            text.files.insert(ino, attr_message_id);
+            text.files.insert(ino.clone(), attr_message_id);
         };
 
         self.edit_meta_message(&new_text).await;
+
+        self.add_child(ino, &parent, &mut client_handle, &peer_into)
+            .await;
+    }
+
+    async fn add_child(
+        &self,
+        child: u64,
+        parent: &u64,
+        mut client_handle: &mut ClientHandle,
+        peer_into: &tl::enums::InputPeer,
+    ) {
+        let (_, meta) = self.get_meta_message(&client_handle).await.unwrap();
+        let parent_id = meta.files.get(&parent).unwrap();
+
+        let message = get_message(&mut client_handle, parent_id.clone()).await;
+        let mut dir_attrs: FileLink = serde_json::from_str(&message.text()).unwrap();
+        dir_attrs.children.push(child);
+
+        let first_msg = serde_json::to_string_pretty(&dir_attrs).unwrap();
+        let second_msg = serde_json::to_string_pretty(&dir_attrs).unwrap();
+
+        edit_or_recreate(
+            message.id(),
+            first_msg.into(),
+            second_msg.into(),
+            &mut client_handle,
+            &peer_into,
+        )
+        .await;
     }
 
     #[tokio::main]
-    pub async fn create_dir(&self, name: &str, ino: u64, attr: &FileAttr) {
+    pub async fn create_dir(&self, name: &str, ino: u64, parent: Option<u64>, attr: &FileAttr) {
+        self.do_create_dir(name, ino, parent, attr).await
+    }
+
+    async fn do_create_dir(&self, name: &str, ino: u64, parent: Option<u64>, attr: &FileAttr) {
         let mut client_handle = self.get_connection().await;
         let peer_into = TgConnection::get_peer();
 
@@ -67,6 +114,11 @@ impl TgConnection {
         };
 
         self.edit_meta_message(&new_text).await;
+
+        if let Some(parent_ino) = parent {
+            self.add_child(ino, &parent_ino, &mut client_handle, &peer_into)
+                .await;
+        }
     }
 
     async fn edit_meta_message(&self, f: &dyn Fn(&mut MetaMessage) -> ()) {
@@ -153,12 +205,7 @@ impl TgConnection {
 
         let file_id = message.files.get(&ino).unwrap();
 
-        let file_message = client_handle
-            .get_messages_by_id(None, &[file_id.clone()])
-            .await
-            .unwrap()
-            .remove(0)
-            .unwrap();
+        let file_message = get_message(&mut client_handle, file_id.clone()).await;
 
         let mut result: FileLink = serde_json::from_str(file_message.text()).unwrap();
         let file = File::open(path).unwrap();

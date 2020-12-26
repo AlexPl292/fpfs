@@ -1,3 +1,4 @@
+use grammers_client::types::Message;
 use grammers_client::{ClientHandle, InputMessage};
 use grammers_mtproto::mtp::RpcError;
 use grammers_mtsender::InvocationError;
@@ -46,4 +47,13 @@ pub async fn edit_or_recreate(
         }
         Err(e) => panic!(e),
     }
+}
+
+pub async fn get_message(client_handle: &mut ClientHandle, file_id: i32) -> Message {
+    client_handle
+        .get_messages_by_id(None, &[file_id])
+        .await
+        .unwrap()
+        .remove(0)
+        .unwrap()
 }

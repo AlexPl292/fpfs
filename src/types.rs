@@ -16,7 +16,7 @@ pub struct MetaMessage {
 #[derive(Serialize, Deserialize, Clone)]
 pub struct FileLink {
     pub name: String,
-    pub children: Vec<i32>,
+    pub children: Vec<u64>,
 
     #[serde(with = "FileAttrDef")]
     pub attr: FileAttr,
@@ -31,7 +31,7 @@ impl FileLink {
         }
     }
 
-    pub fn new_dir(name: String, children: Vec<i32>, attr: FileAttr) -> FileLink {
+    pub fn new_dir(name: String, children: Vec<u64>, attr: FileAttr) -> FileLink {
         FileLink {
             name,
             children,

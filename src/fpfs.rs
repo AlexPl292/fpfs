@@ -89,9 +89,10 @@ impl Fpfs {
 
     fn init_cache(&mut self) {
         if self.files_cache.is_none() {
-            let files = Runtime::new()
+            let mut files = Runtime::new()
                 .unwrap()
                 .block_on(self.connection.get_files_names());
+            files.retain(|x| x.attr.ino != 1);
             self.files_cache = Some(files);
         }
     }
@@ -118,6 +119,11 @@ impl Fpfs {
 }
 
 impl Filesystem for Fpfs {
+    fn init(&mut self, _req: &Request) -> Result<(), i32> {
+        self.connection.check_or_init_meta(&HELLO_DIR_ATTR);
+        Ok(())
+    }
+
     fn lookup(&mut self, _req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
         let my_file_name = name.to_str().unwrap_or("~").to_string();
         let found_file = self.get_cache().iter().find(|x| x.name == my_file_name);
@@ -162,7 +168,7 @@ impl Filesystem for Fpfs {
         reply.attr(&TTL, &HELLO_TXT_ATTR);
     }
 
-    fn mkdir(&mut self, _req: &Request, _parent: u64, name: &OsStr, _mode: u32, reply: ReplyEntry) {
+    fn mkdir(&mut self, _req: &Request, parent: u64, name: &OsStr, _mode: u32, reply: ReplyEntry) {
         let next_ino = self
             .get_cache()
             .iter()
@@ -174,7 +180,7 @@ impl Filesystem for Fpfs {
         let attr = Fpfs::make_dir_attr(next_ino);
         let file_link = FileLink::new_dir(dir_name.clone(), vec![], attr.clone());
         self.connection
-            .create_dir(dir_name.as_str(), next_ino, &attr);
+            .create_dir(dir_name.as_str(), next_ino, Some(parent), &attr);
 
         match self.files_cache {
             Some(ref mut f) => f.push(file_link),
@@ -265,7 +271,7 @@ impl Filesystem for Fpfs {
     fn create(
         &mut self,
         _req: &Request,
-        _parent: u64,
+        parent: u64,
         name: &OsStr,
         _mode: u32,
         flags: u32,
@@ -282,7 +288,7 @@ impl Filesystem for Fpfs {
         let attr = Fpfs::make_attr(0, next_ino);
         let file_link = FileLink::new_file(file_name.clone(), attr.clone());
         self.connection
-            .create_file(file_name.as_str(), next_ino, &attr);
+            .create_file(file_name.as_str(), next_ino, parent, &attr);
 
         match self.files_cache {
             Some(ref mut f) => f.push(file_link),
