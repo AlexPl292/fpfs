@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::fs::File;
 
 use fuse::FileAttr;
-use grammers_client::{Client, ClientHandle, Config, InputMessage};
 use grammers_client::ext::MessageMediaExt;
+use grammers_client::{Client, ClientHandle, Config, InputMessage};
 use grammers_session::Session;
 use grammers_tl_types as tl;
 use tempfile::NamedTempFile;

@@ -2,7 +2,7 @@ use std::ffi::OsStr;
 use std::io::Write;
 
 use fuse::{
-    FileAttr, Filesystem, FileType, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEntry,
+    FileAttr, FileType, Filesystem, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEntry,
     ReplyOpen, ReplyWrite, Request,
 };
 use libc::ENOENT;
@@ -173,7 +173,8 @@ impl Filesystem for Fpfs {
         let dir_name = name.to_str().unwrap().to_string();
         let attr = Fpfs::make_dir_attr(next_ino);
         let file_link = FileLink::new_dir(dir_name.clone(), vec![], attr.clone());
-        self.connection.create_dir(dir_name.as_str(), next_ino, &attr);
+        self.connection
+            .create_dir(dir_name.as_str(), next_ino, &attr);
 
         match self.files_cache {
             Some(ref mut f) => f.push(file_link),
