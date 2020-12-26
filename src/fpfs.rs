@@ -77,13 +77,11 @@ impl Fpfs {
         };
     }
 
-    fn get_cache(&mut self) -> &Vec<FileLink> {
-        self.init_cache();
+    fn get_cache(&self) -> &Vec<FileLink> {
         self.files_cache.as_ref().unwrap()
     }
 
     fn get_cache_mut(&mut self) -> &mut Vec<FileLink> {
-        self.init_cache();
         self.files_cache.as_mut().unwrap()
     }
 
@@ -121,6 +119,7 @@ impl Fpfs {
 impl Filesystem for Fpfs {
     fn init(&mut self, _req: &Request) -> Result<(), i32> {
         self.connection.check_or_init_meta(&HELLO_DIR_ATTR);
+        self.init_cache();
         Ok(())
     }
 
