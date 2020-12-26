@@ -1,15 +1,17 @@
+use std::collections::HashMap;
+use std::fs::File;
+
+use fuse::FileAttr;
 use grammers_client::ext::MessageMediaExt;
 use grammers_client::{Client, ClientHandle, Config, InputMessage};
-use grammers_mtproto::mtp::RpcError;
-use grammers_mtsender::InvocationError;
 use grammers_session::Session;
 use grammers_tl_types as tl;
+use tempfile::NamedTempFile;
 use tokio::task;
 
+use crate::tg_tools::{edit_or_recreate, last_message, resend_message};
 use crate::types::{FileLink, MetaMessage, VERSION};
 use crate::utils;
-use std::fs::File;
-use tempfile::NamedTempFile;
 
 const META_CONSTANT: &'static str = "[META]";
 
@@ -24,10 +26,25 @@ impl TgConnection {
     }
 
     #[tokio::main]
-    pub async fn create_file(&self, name: &FileLink) {
-        let new_text = |text: &mut MetaMessage| text.files.push(name.clone());
+    pub async fn create_file(&self, name: &str, ino: u64, attr: &FileAttr) {
+        let mut client_handle = self.get_connection().await;
+        let peer_into = TgConnection::get_peer();
 
-        self.edit_meta_message(&new_text).await
+        let new_file_link = FileLink::new(name.to_string(), attr.clone());
+
+        let attr_message = serde_json::to_string_pretty(&new_file_link).unwrap();
+        let message: InputMessage = attr_message.into();
+        client_handle
+            .send_message(&peer_into, message)
+            .await
+            .unwrap();
+        let attr_message_id = last_message(&mut client_handle, &peer_into).await;
+
+        let new_text = |text: &mut MetaMessage| {
+            text.files.insert(ino, attr_message_id);
+        };
+
+        self.edit_meta_message(&new_text).await;
     }
 
     async fn edit_meta_message(&self, f: &dyn Fn(&mut MetaMessage) -> ()) {
@@ -42,20 +59,14 @@ impl TgConnection {
 
         let new_text = TgConnection::make_meta_string_message(&meta_message);
 
-        let edit_message_result = client_handle
-            .edit_message(&peer_into, id, new_text.as_str().into())
-            .await;
-
-        match edit_message_result {
-            Ok(_) => (),
-            Err(InvocationError::Rpc(RpcError { name, .. })) => {
-                if name == "MESSAGE_EDIT_TIME_EXPIRED" {
-                    self.resend_meta_message(id, &new_text, &mut client_handle, &peer_into)
-                        .await;
-                }
-            }
-            Err(e) => panic!(e),
-        }
+        edit_or_recreate(
+            id,
+            new_text.as_str().into(),
+            new_text.as_str().into(),
+            &mut client_handle,
+            &peer_into,
+        )
+        .await;
     }
 
     // #[tokio::main]
@@ -64,18 +75,10 @@ impl TgConnection {
 
         let (_, message) = self.get_meta_message(&client_handle).await?;
 
-        let found_file = message.files.iter().find(|x| x.attr.ino == ino)?;
-        let meta_id = found_file.meta_file_link?;
+        let meta_id = message.files.get(&ino)?;
 
-        let file_meta_message = client_handle
-            .get_messages_by_id(None, &[meta_id])
-            .await
-            .ok()?
-            .into_iter()
-            .nth(0)??;
-        let file_id: i32 = file_meta_message.text().parse().ok()?;
         let file_message = client_handle
-            .get_messages_by_id(None, &[file_id])
+            .get_messages_by_id(None, &[meta_id.clone()])
             .await
             .ok()?
             .into_iter()
@@ -99,7 +102,19 @@ impl TgConnection {
             .get_or_create_meta_message(&mut client_handle, &peer_into)
             .await;
 
-        text.files
+        let ids: Vec<i32> = text.files.values().map(|x| x.clone()).collect();
+        let messages = client_handle
+            .get_messages_by_id(None, &ids)
+            .await
+            .unwrap_or(vec![])
+            .iter()
+            .filter_map(|x| match x {
+                None => None,
+                Some(t) => serde_json::from_str(t.text()).unwrap(),
+            })
+            .collect();
+
+        messages
     }
 
     #[tokio::main]
@@ -107,71 +122,39 @@ impl TgConnection {
         let mut client_handle = self.get_connection().await;
         let peer_into = TgConnection::get_peer();
 
+        // Upload file
         let path = tempfile.path().to_str().unwrap();
-
         let res: tl::enums::InputFile = client_handle.upload_file(path).await.unwrap();
 
-        let message = InputMessage::text(path).file(res);
-        client_handle
-            .send_message(&peer_into, message)
+        // Get file message
+        let (_, message) = self.get_meta_message(&mut client_handle).await.unwrap();
+
+        let file_id = message.files.get(&ino).unwrap();
+
+        let file_message = client_handle
+            .get_messages_by_id(None, &[file_id.clone()])
             .await
+            .unwrap()
+            .remove(0)
             .unwrap();
 
-        let (id, _) = TgConnection::find_message_by_text(&client_handle, &|msg| msg == path)
-            .await
-            .unwrap();
+        let mut result: FileLink = serde_json::from_str(file_message.text()).unwrap();
+        let file = File::open(path).unwrap();
+        result.attr.size = file.metadata().unwrap().len();
 
-        let id_string = id.to_string();
-        client_handle
-            .send_message(&peer_into, id_string.as_str().into())
-            .await
-            .unwrap();
+        // Update file message
+        let message =
+            InputMessage::text(serde_json::to_string_pretty(&result).unwrap()).file(res.clone());
 
-        let (id, _) =
-            TgConnection::find_message_by_text(&client_handle, &|msg| msg == id_string.as_str())
-                .await
-                .unwrap();
+        // TODO Actually we can just modify the existing message, but it's not supported by grammers yet
+        let recreated_id =
+            resend_message(file_message.id(), message, &mut client_handle, &peer_into).await;
 
-        self.edit_meta_message(&|msg| {
-            let file_name = msg
-                .files
-                .iter()
-                .find(|x| x.attr.ino == ino)
-                .map(|x| x.name.to_string())
-                .unwrap();
-            let mut attr = msg
-                .files
-                .iter()
-                .find(|x| x.attr.ino == ino)
-                .map(|x| x.attr)
-                .unwrap();
-            let file = File::open(path).unwrap();
-            attr.size = file.metadata().unwrap().len();
-            msg.files.retain(|x| x.attr.ino != ino);
-            msg.files
-                .push(FileLink::new(file_name.to_string(), Some(id), attr))
-        })
-        .await;
-    }
-
-    async fn resend_meta_message(
-        &self,
-        old_message_id: i32,
-        message: &str,
-        client_handler: &mut ClientHandle,
-        peer: &tl::enums::InputPeer,
-    ) -> i32 {
-        client_handler
-            .delete_messages(None, &[old_message_id])
-            .await
-            .unwrap();
-
-        // TODO this method should return message instance
-        client_handler
-            .send_message(peer, message.into())
-            .await
-            .unwrap();
-        self.get_meta_message(client_handler).await.unwrap().0
+        // Update meta message if needed
+        let update = |x: &mut MetaMessage| {
+            x.files.insert(ino, recreated_id);
+        };
+        self.edit_meta_message(&update).await;
     }
 
     async fn get_or_create_meta_message(
@@ -185,7 +168,7 @@ impl TgConnection {
             None => {
                 let meta_message = MetaMessage {
                     version: VERSION.to_string(),
-                    files: vec![],
+                    files: HashMap::new(),
                 };
                 let initial_message = TgConnection::make_meta_string_message(&meta_message);
                 client_handle

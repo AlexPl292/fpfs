@@ -3,7 +3,7 @@ use std::io::Write;
 
 use fuse::{
     FileAttr, FileType, Filesystem, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEntry,
-    ReplyWrite, Request,
+    ReplyOpen, ReplyWrite, Request,
 };
 use libc::ENOENT;
 use tempfile::NamedTempFile;
@@ -155,6 +155,10 @@ impl Filesystem for Fpfs {
         reply.attr(&TTL, &HELLO_TXT_ATTR);
     }
 
+    fn open(&mut self, _req: &Request, _ino: u64, flags: u32, reply: ReplyOpen) {
+        reply.opened(0, flags);
+    }
+
     fn read(
         &mut self,
         _req: &Request,
@@ -243,11 +247,13 @@ impl Filesystem for Fpfs {
             .iter()
             .map(|x| x.attr.ino)
             .max()
-            .unwrap_or(2) + 1;
+            .unwrap_or(2)
+            + 1;
         let file_name = name.to_str().unwrap().to_string();
         let attr = Fpfs::make_attr(0, next_ino);
-        let file_link = FileLink::new(file_name, None, attr.clone());
-        self.connection.create_file(&file_link);
+        let file_link = FileLink::new(file_name.clone(), attr.clone());
+        self.connection
+            .create_file(file_name.as_str(), next_ino, &attr);
 
         match self.files_cache {
             Some(ref mut f) => f.push(file_link),

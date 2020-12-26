@@ -4,7 +4,7 @@ use simple_logger::SimpleLogger;
 use std::ffi::OsStr;
 use std::fs;
 use std::fs::File;
-use std::path::{PathBuf, Path};
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread::sleep;
 use tokio::time::Duration;
@@ -59,7 +59,10 @@ fn file_loop(path: &Path, file_name: &str, amount_of_existing_files: usize, cont
         .collect::<Vec<PathBuf>>();
 
     assert_eq!(file_list.len(), amount_of_existing_files + 1);
-    assert!(file_list.iter().map(|x| x.to_str().unwrap()).any(|x| x == another_path));
+    assert!(file_list
+        .iter()
+        .map(|x| x.to_str().unwrap())
+        .any(|x| x == another_path));
 
     fs::write(&another_path, content).unwrap();
 
@@ -68,4 +71,3 @@ fn file_loop(path: &Path, file_name: &str, amount_of_existing_files: usize, cont
 
     assert_eq!(content, result);
 }
-
