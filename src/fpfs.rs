@@ -2,7 +2,7 @@ use std::ffi::OsStr;
 use std::io::Write;
 
 use fuse::{
-    FileAttr, FileType, Filesystem, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEntry,
+    FileAttr, Filesystem, FileType, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEntry,
     ReplyOpen, ReplyWrite, Request,
 };
 use libc::ENOENT;
@@ -104,6 +104,13 @@ impl Fpfs {
         }
     }
 
+    fn make_dir_attr(ino: u64) -> FileAttr {
+        FileAttr {
+            ino,
+            ..HELLO_DIR_ATTR
+        }
+    }
+
     #[allow(dead_code)]
     pub fn remove_meta(&self) {
         self.connection.cleanup();
@@ -153,6 +160,27 @@ impl Filesystem for Fpfs {
         reply: ReplyAttr,
     ) {
         reply.attr(&TTL, &HELLO_TXT_ATTR);
+    }
+
+    fn mkdir(&mut self, _req: &Request, _parent: u64, name: &OsStr, _mode: u32, reply: ReplyEntry) {
+        let next_ino = self
+            .get_cache()
+            .iter()
+            .map(|x| x.attr.ino)
+            .max()
+            .unwrap_or(2)
+            + 1;
+        let dir_name = name.to_str().unwrap().to_string();
+        let attr = Fpfs::make_dir_attr(next_ino);
+        let file_link = FileLink::new_dir(dir_name.clone(), vec![], attr.clone());
+        self.connection.create_dir(dir_name.as_str(), next_ino, &attr);
+
+        match self.files_cache {
+            Some(ref mut f) => f.push(file_link),
+            None => (),
+        }
+
+        reply.entry(&TTL, &attr, 0);
     }
 
     fn open(&mut self, _req: &Request, _ino: u64, flags: u32, reply: ReplyOpen) {

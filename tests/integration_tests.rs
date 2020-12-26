@@ -40,6 +40,9 @@ fn create_empty_file() {
     file_loop(path, "another", 0, "123");
     file_loop(path, "another_one_file", 1, "456");
 
+    let dir_path = format!("{}/{}", path.as_os_str().to_str().unwrap(), "my_dir");
+    fs::create_dir(dir_path).unwrap();
+
     Command::new("umount")
         .arg(path.to_str().unwrap())
         .spawn()

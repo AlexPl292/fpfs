@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::fs::File;
 
 use fuse::FileAttr;
-use grammers_client::ext::MessageMediaExt;
 use grammers_client::{Client, ClientHandle, Config, InputMessage};
+use grammers_client::ext::MessageMediaExt;
 use grammers_session::Session;
 use grammers_tl_types as tl;
 use tempfile::NamedTempFile;
@@ -31,6 +31,28 @@ impl TgConnection {
         let peer_into = TgConnection::get_peer();
 
         let new_file_link = FileLink::new_file(name.to_string(), attr.clone());
+
+        let attr_message = serde_json::to_string_pretty(&new_file_link).unwrap();
+        let message: InputMessage = attr_message.into();
+        client_handle
+            .send_message(&peer_into, message)
+            .await
+            .unwrap();
+        let attr_message_id = last_message(&mut client_handle, &peer_into).await;
+
+        let new_text = |text: &mut MetaMessage| {
+            text.files.insert(ino, attr_message_id);
+        };
+
+        self.edit_meta_message(&new_text).await;
+    }
+
+    #[tokio::main]
+    pub async fn create_dir(&self, name: &str, ino: u64, attr: &FileAttr) {
+        let mut client_handle = self.get_connection().await;
+        let peer_into = TgConnection::get_peer();
+
+        let new_file_link = FileLink::new_dir(name.to_string(), vec![], attr.clone());
 
         let attr_message = serde_json::to_string_pretty(&new_file_link).unwrap();
         let message: InputMessage = attr_message.into();
