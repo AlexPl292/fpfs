@@ -106,7 +106,7 @@ impl Fpfs {
 
     #[allow(dead_code)]
     pub fn remove_meta(&self) {
-        self.connection.remove_meta();
+        self.connection.cleanup();
     }
 }
 

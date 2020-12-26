@@ -186,12 +186,17 @@ impl TgConnection {
     }
 
     #[tokio::main]
-    pub async fn remove_meta(&self) {
+    pub async fn cleanup(&self) {
         let mut client_handle = self.get_connection().await;
 
         let meta_message = self.get_meta_message(&client_handle).await;
-        if let Some((id, _)) = meta_message {
-            client_handle.delete_messages(None, &[id]).await.unwrap();
+        if let Some((id, message)) = meta_message {
+            let mut messages_to_delete: Vec<i32> = message.files.values().cloned().collect();
+            messages_to_delete.push(id);
+            client_handle
+                .delete_messages(None, &messages_to_delete)
+                .await
+                .unwrap();
         }
     }
 
