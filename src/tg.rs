@@ -167,8 +167,7 @@ impl TgConnection {
         Some(file)
     }
 
-    // #[tokio::main]
-    pub async fn get_files_names(&self) -> Vec<FileLink> {
+    pub async fn get_directory_files(&self, parent: &u64) -> Vec<FileLink> {
         let mut client_handle = self.get_connection().await;
         let peer_into = TgConnection::get_peer();
 
@@ -176,9 +175,17 @@ impl TgConnection {
             .get_or_create_meta_message(&mut client_handle, &peer_into)
             .await;
 
-        let ids: Vec<i32> = text.files.values().map(|x| x.clone()).collect();
-        let messages = client_handle
-            .get_messages_by_id(None, &ids)
+        let directory_msg_id = text.files.get(parent).unwrap();
+        let directory_msg = get_message(&mut client_handle, directory_msg_id.clone()).await;
+        let directory: FileLink = serde_json::from_str(directory_msg.text()).unwrap();
+        let file_ids: Vec<i32> = directory
+            .children
+            .iter()
+            .map(|x| text.files.get(x).unwrap().clone())
+            .collect();
+
+        client_handle
+            .get_messages_by_id(None, &file_ids)
             .await
             .unwrap_or(vec![])
             .iter()
@@ -186,9 +193,7 @@ impl TgConnection {
                 None => None,
                 Some(t) => serde_json::from_str(t.text()).unwrap(),
             })
-            .collect();
-
-        messages
+            .collect()
     }
 
     #[tokio::main]

@@ -63,6 +63,7 @@ const HELLO_TXT_ATTR: FileAttr = FileAttr {
 pub struct Fpfs {
     connection: TgConnection,
     files_cache: Option<Vec<FileLink>>,
+    cache_ino: u64,
 }
 
 impl Fpfs {
@@ -74,24 +75,30 @@ impl Fpfs {
         return Fpfs {
             connection,
             files_cache: None,
+            cache_ino: 0,
         };
     }
 
-    fn get_cache(&self) -> &Vec<FileLink> {
+    fn get_cache(&mut self, directory: &u64) -> &Vec<FileLink> {
+        self.init_cache(directory);
         self.files_cache.as_ref().unwrap()
     }
 
-    fn get_cache_mut(&mut self) -> &mut Vec<FileLink> {
+    fn get_cur_cache(&self) -> &Vec<FileLink> {
+        self.files_cache.as_ref().unwrap()
+    }
+
+    fn get_cur_cache_mut(&mut self) -> &mut Vec<FileLink> {
         self.files_cache.as_mut().unwrap()
     }
 
-    fn init_cache(&mut self) {
-        if self.files_cache.is_none() {
-            let mut files = Runtime::new()
+    fn init_cache(&mut self, directory: &u64) {
+        if self.files_cache.is_none() || self.cache_ino != *directory {
+            let files = Runtime::new()
                 .unwrap()
-                .block_on(self.connection.get_files_names());
-            files.retain(|x| x.attr.ino != 1);
+                .block_on(self.connection.get_directory_files(directory));
             self.files_cache = Some(files);
+            self.cache_ino = directory.clone()
         }
     }
 
@@ -119,13 +126,16 @@ impl Fpfs {
 impl Filesystem for Fpfs {
     fn init(&mut self, _req: &Request) -> Result<(), i32> {
         self.connection.check_or_init_meta(&HELLO_DIR_ATTR);
-        self.init_cache();
+        self.init_cache(&HELLO_DIR_ATTR.ino);
         Ok(())
     }
 
     fn lookup(&mut self, _req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
         let my_file_name = name.to_str().unwrap_or("~").to_string();
-        let found_file = self.get_cache().iter().find(|x| x.name == my_file_name);
+        let found_file = self
+            .get_cache(&parent)
+            .iter()
+            .find(|x| x.name == my_file_name);
         if parent == 1 && found_file.is_some() {
             reply.entry(&TTL, &found_file.unwrap().attr, 0);
         } else {
@@ -137,7 +147,7 @@ impl Filesystem for Fpfs {
         match ino {
             1 => reply.attr(&TTL, &HELLO_DIR_ATTR),
             _ => {
-                let attr = self.get_cache().iter().find(|x| x.attr.ino == ino);
+                let attr = self.get_cur_cache().iter().find(|x| x.attr.ino == ino);
                 if let Some(data) = attr {
                     reply.attr(&TTL, &data.attr)
                 } else {
@@ -169,7 +179,7 @@ impl Filesystem for Fpfs {
 
     fn mkdir(&mut self, _req: &Request, parent: u64, name: &OsStr, _mode: u32, reply: ReplyEntry) {
         let next_ino = self
-            .get_cache()
+            .get_cache(&parent)
             .iter()
             .map(|x| x.attr.ino)
             .max()
@@ -228,7 +238,7 @@ impl Filesystem for Fpfs {
 
         self.connection.write_to_file(path, ino);
 
-        self.get_cache_mut()
+        self.get_cur_cache_mut()
             .iter_mut()
             .find(|x| x.attr.ino == ino)
             .unwrap()
@@ -256,7 +266,7 @@ impl Filesystem for Fpfs {
             (1, FileType::Directory, String::from("..")),
         ];
 
-        for file in self.get_cache() {
+        for file in self.get_cache(&ino) {
             entries.push((file.attr.ino, FileType::RegularFile, file.name.to_string()))
         }
 
@@ -277,7 +287,7 @@ impl Filesystem for Fpfs {
         reply: ReplyCreate,
     ) {
         let next_ino = self
-            .get_cache()
+            .get_cache(&parent)
             .iter()
             .map(|x| x.attr.ino)
             .max()
