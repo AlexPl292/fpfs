@@ -11,6 +11,7 @@ pub const VERSION: &'static str = "v1";
 pub struct MetaMessage {
     pub version: String,
     pub files: HashMap<u64, i32>,
+    pub next_ino: u64,
 }
 
 #[derive(Serialize, Deserialize, Clone)]

@@ -55,6 +55,7 @@ impl TgConnection {
 
         let new_text = |text: &mut MetaMessage| {
             text.files.insert(ino.clone(), attr_message_id);
+            text.next_ino = ino + 1;
         };
 
         self.edit_meta_message(&new_text).await;
@@ -111,6 +112,7 @@ impl TgConnection {
 
         let new_text = |text: &mut MetaMessage| {
             text.files.insert(ino, attr_message_id);
+            text.next_ino = ino + 1;
         };
 
         self.edit_meta_message(&new_text).await;
@@ -243,6 +245,7 @@ impl TgConnection {
                 let meta_message = MetaMessage {
                     version: VERSION.to_string(),
                     files: HashMap::new(),
+                    next_ino: 0u64,
                 };
                 let initial_message = TgConnection::make_meta_string_message(&meta_message);
                 client_handle
@@ -272,6 +275,11 @@ impl TgConnection {
                 .await
                 .unwrap();
         }
+    }
+
+    pub async fn get_next_ino(&self) -> u64 {
+        let client_handle = self.get_connection().await;
+        self.get_meta_message(&client_handle).await.unwrap().1.next_ino
     }
 
     async fn get_meta_message(&self, client_handle: &ClientHandle) -> Option<(i32, MetaMessage)> {

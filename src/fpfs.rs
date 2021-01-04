@@ -121,6 +121,12 @@ impl Fpfs {
     pub fn remove_meta(&self) {
         self.connection.cleanup();
     }
+
+    fn next_ino(&self) -> u64 {
+        Runtime::new()
+            .unwrap()
+            .block_on(self.connection.get_next_ino())
+    }
 }
 
 impl Filesystem for Fpfs {
@@ -178,13 +184,7 @@ impl Filesystem for Fpfs {
     }
 
     fn mkdir(&mut self, _req: &Request, parent: u64, name: &OsStr, _mode: u32, reply: ReplyEntry) {
-        let next_ino = self
-            .get_cache(&parent)
-            .iter()
-            .map(|x| x.attr.ino)
-            .max()
-            .unwrap_or(2)
-            + 1;
+        let next_ino = self.next_ino();
         let dir_name = name.to_str().unwrap().to_string();
         let attr = Fpfs::make_dir_attr(next_ino);
         let file_link = FileLink::new_dir(dir_name.clone(), vec![], attr.clone());
@@ -286,13 +286,7 @@ impl Filesystem for Fpfs {
         flags: u32,
         reply: ReplyCreate,
     ) {
-        let next_ino = self
-            .get_cache(&parent)
-            .iter()
-            .map(|x| x.attr.ino)
-            .max()
-            .unwrap_or(2)
-            + 1;
+        let next_ino = self.next_ino();
         let file_name = name.to_str().unwrap().to_string();
         let attr = Fpfs::make_attr(0, next_ino);
         let file_link = FileLink::new_file(file_name.clone(), attr.clone());
