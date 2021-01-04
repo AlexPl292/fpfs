@@ -1,12 +1,13 @@
 extern crate fpfs;
 
-use simple_logger::SimpleLogger;
 use std::ffi::OsStr;
 use std::fs;
 use std::fs::File;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::thread::sleep;
+
+use simple_logger::SimpleLogger;
 use tokio::time::Duration;
 
 #[test]
@@ -43,6 +44,8 @@ fn create_empty_file() {
     let dir_path = format!("{}/{}", path.as_os_str().to_str().unwrap(), "my_dir");
     fs::create_dir(dir_path).unwrap();
 
+    file_loop_with_dir(path, "my_dir", "another", 0, "123");
+
     Command::new("umount")
         .arg(path.to_str().unwrap())
         .spawn()
@@ -56,6 +59,37 @@ fn file_loop(path: &Path, file_name: &str, amount_of_existing_files: usize, cont
     File::create(&another_path).unwrap();
 
     let file_list = fs::read_dir(path)
+        .unwrap()
+        .into_iter()
+        .map(|x| x.unwrap().path())
+        .collect::<Vec<PathBuf>>();
+
+    assert_eq!(file_list.len(), amount_of_existing_files + 1);
+    assert!(file_list
+        .iter()
+        .map(|x| x.to_str().unwrap())
+        .any(|x| x == another_path));
+
+    fs::write(&another_path, content).unwrap();
+
+    let bytes = fs::read(&another_path).unwrap();
+    let result = String::from_utf8(bytes).unwrap();
+
+    assert_eq!(content, result);
+}
+
+fn file_loop_with_dir(
+    path: &Path,
+    dir: &str,
+    file_name: &str,
+    amount_of_existing_files: usize,
+    content: &str,
+) {
+    let goal_dir = format!("{}/{}", path.as_os_str().to_str().unwrap(), dir);
+    let another_path = format!("{}/{}", &goal_dir, file_name);
+    File::create(&another_path).unwrap();
+
+    let file_list = fs::read_dir(goal_dir)
         .unwrap()
         .into_iter()
         .map(|x| x.unwrap().path())

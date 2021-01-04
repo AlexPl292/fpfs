@@ -198,6 +198,19 @@ impl TgConnection {
             .collect()
     }
 
+    pub async fn get_file_attr(&self, ino: &u64) -> Option<FileLink> {
+        let mut client_handle = self.get_connection().await;
+        let peer_into = TgConnection::get_peer();
+
+        let (_, text) = self
+            .get_or_create_meta_message(&mut client_handle, &peer_into)
+            .await;
+
+        let file_msg_id = text.files.get(ino)?;
+        let message = get_message(&mut client_handle, file_msg_id.clone()).await;
+        serde_json::from_str(message.text()).ok()
+    }
+
     #[tokio::main]
     pub async fn write_to_file(&self, tempfile: NamedTempFile, ino: u64) {
         let mut client_handle = self.get_connection().await;
@@ -279,7 +292,11 @@ impl TgConnection {
 
     pub async fn get_next_ino(&self) -> u64 {
         let client_handle = self.get_connection().await;
-        self.get_meta_message(&client_handle).await.unwrap().1.next_ino
+        self.get_meta_message(&client_handle)
+            .await
+            .unwrap()
+            .1
+            .next_ino
     }
 
     async fn get_meta_message(&self, client_handle: &ClientHandle) -> Option<(i32, MetaMessage)> {

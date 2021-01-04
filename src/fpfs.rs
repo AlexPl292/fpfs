@@ -142,7 +142,7 @@ impl Filesystem for Fpfs {
             .get_cache(&parent)
             .iter()
             .find(|x| x.name == my_file_name);
-        if parent == 1 && found_file.is_some() {
+        if found_file.is_some() {
             reply.entry(&TTL, &found_file.unwrap().attr, 0);
         } else {
             reply.error(ENOENT);
@@ -150,15 +150,17 @@ impl Filesystem for Fpfs {
     }
 
     fn getattr(&mut self, _req: &Request, ino: u64, reply: ReplyAttr) {
-        match ino {
-            1 => reply.attr(&TTL, &HELLO_DIR_ATTR),
-            _ => {
-                let attr = self.get_cur_cache().iter().find(|x| x.attr.ino == ino);
-                if let Some(data) = attr {
-                    reply.attr(&TTL, &data.attr)
-                } else {
-                    reply.error(ENOENT)
-                }
+        let attr = self.get_cur_cache().iter().find(|x| x.attr.ino == ino);
+        if let Some(data) = attr {
+            reply.attr(&TTL, &data.attr)
+        } else {
+            let attr = Runtime::new()
+                .unwrap()
+                .block_on(self.connection.get_file_attr(&ino));
+            if let Some(data) = attr {
+                reply.attr(&TTL, &data.attr)
+            } else {
+                reply.error(ENOENT)
             }
         }
     }
@@ -248,6 +250,11 @@ impl Filesystem for Fpfs {
         reply.written(data.len() as u32)
     }
 
+    fn opendir(&mut self, _req: &Request, ino: u64, flags: u32, reply: ReplyOpen) {
+        self.init_cache(&ino);
+        reply.opened(0, flags);
+    }
+
     fn readdir(
         &mut self,
         _req: &Request,
@@ -256,11 +263,6 @@ impl Filesystem for Fpfs {
         offset: i64,
         mut reply: ReplyDirectory,
     ) {
-        if ino != 1 {
-            reply.error(ENOENT);
-            return;
-        }
-
         let mut entries: Vec<(u64, FileType, String)> = vec![
             (1, FileType::Directory, String::from(".")),
             (1, FileType::Directory, String::from("..")),
