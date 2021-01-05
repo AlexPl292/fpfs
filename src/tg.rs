@@ -35,6 +35,7 @@ impl TgConnection {
             .await;
         if meta.files.is_empty() {
             self.do_create_dir("", root_attr.ino, None, root_attr).await;
+            self.edit_meta_message(&|x: &mut MetaMessage| x.next_ino = root_attr.ino + 1).await;
         }
     }
 
@@ -55,7 +56,6 @@ impl TgConnection {
 
         let new_text = |text: &mut MetaMessage| {
             text.files.insert(ino.clone(), attr_message_id);
-            text.next_ino = ino + 1;
         };
 
         self.edit_meta_message(&new_text).await;
@@ -112,7 +112,6 @@ impl TgConnection {
 
         let new_text = |text: &mut MetaMessage| {
             text.files.insert(ino, attr_message_id);
-            text.next_ino = ino + 1;
         };
 
         self.edit_meta_message(&new_text).await;
@@ -123,7 +122,7 @@ impl TgConnection {
         }
     }
 
-    async fn edit_meta_message(&self, f: &dyn Fn(&mut MetaMessage) -> ()) {
+    async fn edit_meta_message<F>(&self, f: &dyn Fn(&mut MetaMessage) -> F) -> F {
         let mut client_handle = self.get_connection().await;
         let peer_into = TgConnection::get_peer();
 
@@ -131,7 +130,7 @@ impl TgConnection {
             .get_or_create_meta_message(&mut client_handle, &peer_into)
             .await;
 
-        f(&mut meta_message);
+        let res = f(&mut meta_message);
 
         let new_text = TgConnection::make_meta_string_message(&meta_message);
 
@@ -143,6 +142,7 @@ impl TgConnection {
             &peer_into,
         )
         .await;
+        res
     }
 
     // #[tokio::main]
@@ -290,13 +290,13 @@ impl TgConnection {
         }
     }
 
-    pub async fn get_next_ino(&self) -> u64 {
-        let client_handle = self.get_connection().await;
-        self.get_meta_message(&client_handle)
-            .await
-            .unwrap()
-            .1
-            .next_ino
+    pub async fn get_and_inc_ino(&self) -> u64 {
+        let editor = |msg: &mut MetaMessage| {
+            let next_ino = msg.next_ino;
+            msg.next_ino = next_ino + 1;
+            next_ino
+        };
+        self.edit_meta_message(&editor).await
     }
 
     async fn get_meta_message(&self, client_handle: &ClientHandle) -> Option<(i32, MetaMessage)> {

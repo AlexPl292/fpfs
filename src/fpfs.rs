@@ -125,7 +125,7 @@ impl Fpfs {
     fn next_ino(&self) -> u64 {
         Runtime::new()
             .unwrap()
-            .block_on(self.connection.get_next_ino())
+            .block_on(self.connection.get_and_inc_ino())
     }
 }
 
