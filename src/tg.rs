@@ -7,7 +7,6 @@ use grammers_client::{Client, ClientHandle, Config, InputMessage};
 use grammers_session::Session;
 use grammers_tl_types as tl;
 use tempfile::NamedTempFile;
-use tokio::task;
 
 use crate::tg_tools::{edit_or_recreate, get_message, last_message, resend_message};
 use crate::types::{FileLink, MetaMessage, VERSION};
@@ -16,32 +15,50 @@ use crate::utils;
 const META_CONSTANT: &'static str = "[META]";
 
 pub struct TgConnection {
-    api_id: i32,
-    api_hash: String,
+    client_handler: ClientHandle,
 }
 
 impl TgConnection {
-    pub fn connect(api_id: i32, api_hash: String) -> TgConnection {
-        return TgConnection { api_id, api_hash };
+    pub async fn connect() -> (TgConnection, Client) {
+        let api_id: i32 = env!("TG_ID").parse().expect("TG_ID invalid");
+        let api_hash = env!("TG_HASH").to_string();
+
+        let mut client = Client::connect(Config {
+            session: Session::load_or_create("dialogs.session").unwrap(),
+            api_id,
+            api_hash: api_hash.clone(),
+            params: Default::default(),
+        })
+        .await
+        .unwrap();
+
+        if !client.is_authorized().await.unwrap() {
+            panic!("Panic")
+        }
+
+        let client_handler = client.handle();
+
+        return (
+            TgConnection {
+                client_handler,
+            },
+            client,
+        );
     }
 
     #[tokio::main]
-    pub async fn check_or_init_meta(&self, root_attr: &FileAttr) {
-        let mut client_handle = self.get_connection().await;
-        let peer_into = TgConnection::get_peer();
-
-        let (_, meta) = self
-            .get_or_create_meta_message(&mut client_handle, &peer_into)
-            .await;
+    pub async fn check_or_init_meta(&mut self, root_attr: &FileAttr) {
+        let (_, meta) = self.get_or_create_meta_message().await;
         if meta.files.is_empty() {
             self.do_create_dir("", root_attr.ino, None, root_attr).await;
-            self.edit_meta_message(&|x: &mut MetaMessage| x.next_ino = root_attr.ino + 1).await;
+            self.edit_meta_message(&|x: &mut MetaMessage| x.next_ino = root_attr.ino + 1)
+                .await;
         }
     }
 
     #[tokio::main]
-    pub async fn create_file(&self, name: &str, ino: u64, parent: u64, attr: &FileAttr) {
-        let mut client_handle = self.get_connection().await;
+    pub async fn create_file(&mut self, name: &str, ino: u64, parent: u64, attr: &FileAttr) {
+        let mut client_handle = &mut self.client_handler;
         let peer_into = TgConnection::get_peer();
 
         let new_file_link = FileLink::new_file(name.to_string(), attr.clone());
@@ -60,20 +77,16 @@ impl TgConnection {
 
         self.edit_meta_message(&new_text).await;
 
-        self.add_child(ino, &parent, &mut client_handle, &peer_into)
-            .await;
+        self.add_child(ino, &parent).await;
     }
 
-    async fn add_child(
-        &self,
-        child: u64,
-        parent: &u64,
-        mut client_handle: &mut ClientHandle,
-        peer_into: &tl::enums::InputPeer,
-    ) {
-        let (_, meta) = self.get_meta_message(&client_handle).await.unwrap();
+    async fn add_child(&mut self, child: u64, parent: &u64) {
+        let peer_into = TgConnection::get_peer();
+
+        let (_, meta) = self.get_meta_message().await.unwrap();
         let parent_id = meta.files.get(&parent).unwrap();
 
+        let mut client_handle = &mut self.client_handler;
         let message = get_message(&mut client_handle, parent_id.clone()).await;
         let mut dir_attrs: FileLink = serde_json::from_str(&message.text()).unwrap();
         dir_attrs.children.push(child);
@@ -92,12 +105,12 @@ impl TgConnection {
     }
 
     #[tokio::main]
-    pub async fn create_dir(&self, name: &str, ino: u64, parent: Option<u64>, attr: &FileAttr) {
+    pub async fn create_dir(&mut self, name: &str, ino: u64, parent: Option<u64>, attr: &FileAttr) {
         self.do_create_dir(name, ino, parent, attr).await
     }
 
-    async fn do_create_dir(&self, name: &str, ino: u64, parent: Option<u64>, attr: &FileAttr) {
-        let mut client_handle = self.get_connection().await;
+    async fn do_create_dir(&mut self, name: &str, ino: u64, parent: Option<u64>, attr: &FileAttr) {
+        let mut client_handle = &mut self.client_handler;
         let peer_into = TgConnection::get_peer();
 
         let new_file_link = FileLink::new_dir(name.to_string(), vec![], attr.clone());
@@ -114,26 +127,22 @@ impl TgConnection {
             text.files.insert(ino, attr_message_id);
         };
 
-        self.edit_meta_message(&new_text).await;
-
         if let Some(parent_ino) = parent {
-            self.add_child(ino, &parent_ino, &mut client_handle, &peer_into)
-                .await;
+            self.add_child(ino, &parent_ino).await;
         }
+
+        self.edit_meta_message(&new_text).await;
     }
 
-    async fn edit_meta_message<F>(&self, f: &dyn Fn(&mut MetaMessage) -> F) -> F {
-        let mut client_handle = self.get_connection().await;
-        let peer_into = TgConnection::get_peer();
-
-        let (id, mut meta_message) = self
-            .get_or_create_meta_message(&mut client_handle, &peer_into)
-            .await;
+    async fn edit_meta_message<F>(&mut self, f: &dyn Fn(&mut MetaMessage) -> F) -> F {
+        let (id, mut meta_message) = self.get_or_create_meta_message().await;
 
         let res = f(&mut meta_message);
 
         let new_text = TgConnection::make_meta_string_message(&meta_message);
 
+        let mut client_handle = &mut self.client_handler;
+        let peer_into = TgConnection::get_peer();
         edit_or_recreate(
             id,
             new_text.as_str().into(),
@@ -146,12 +155,12 @@ impl TgConnection {
     }
 
     // #[tokio::main]
-    pub async fn read_file(&self, ino: u64) -> Option<Vec<u8>> {
-        let mut client_handle = self.get_connection().await;
-
-        let (_, message) = self.get_meta_message(&client_handle).await?;
+    pub async fn read_file(&mut self, ino: u64) -> Option<Vec<u8>> {
+        let (_, message) = self.get_meta_message().await?;
 
         let meta_id = message.files.get(&ino)?;
+
+        let client_handle = &mut self.client_handler;
 
         let file_message = client_handle
             .get_messages_by_id(None, &[meta_id.clone()])
@@ -169,13 +178,10 @@ impl TgConnection {
         Some(file)
     }
 
-    pub async fn get_directory_files(&self, parent: &u64) -> Vec<FileLink> {
-        let mut client_handle = self.get_connection().await;
-        let peer_into = TgConnection::get_peer();
+    pub async fn get_directory_files(&mut self, parent: &u64) -> Vec<FileLink> {
+        let (_, text) = self.get_or_create_meta_message().await;
 
-        let (_, text) = self
-            .get_or_create_meta_message(&mut client_handle, &peer_into)
-            .await;
+        let mut client_handle = &mut self.client_handler;
 
         let directory_msg_id = text.files.get(parent).unwrap();
         let directory_msg = get_message(&mut client_handle, directory_msg_id.clone()).await;
@@ -198,13 +204,10 @@ impl TgConnection {
             .collect()
     }
 
-    pub async fn get_file_attr(&self, ino: &u64) -> Option<FileLink> {
-        let mut client_handle = self.get_connection().await;
-        let peer_into = TgConnection::get_peer();
+    pub async fn get_file_attr(&mut self, ino: &u64) -> Option<FileLink> {
+        let (_, text) = self.get_or_create_meta_message().await;
 
-        let (_, text) = self
-            .get_or_create_meta_message(&mut client_handle, &peer_into)
-            .await;
+        let mut client_handle = &mut self.client_handler;
 
         let file_msg_id = text.files.get(ino)?;
         let message = get_message(&mut client_handle, file_msg_id.clone()).await;
@@ -212,8 +215,8 @@ impl TgConnection {
     }
 
     #[tokio::main]
-    pub async fn write_to_file(&self, tempfile: NamedTempFile, ino: u64) {
-        let mut client_handle = self.get_connection().await;
+    pub async fn write_to_file(&mut self, tempfile: NamedTempFile, ino: u64) {
+        let client_handle = &mut self.client_handler;
         let peer_into = TgConnection::get_peer();
 
         // Upload file
@@ -221,10 +224,11 @@ impl TgConnection {
         let res: tl::enums::InputFile = client_handle.upload_file(path).await.unwrap();
 
         // Get file message
-        let (_, message) = self.get_meta_message(&mut client_handle).await.unwrap();
+        let (_, message) = self.get_meta_message().await.unwrap();
 
         let file_id = message.files.get(&ino).unwrap();
 
+        let mut client_handle = &mut self.client_handler;
         let file_message = get_message(&mut client_handle, file_id.clone()).await;
 
         let mut result: FileLink = serde_json::from_str(file_message.text()).unwrap();
@@ -246,12 +250,12 @@ impl TgConnection {
         self.edit_meta_message(&update).await;
     }
 
-    async fn get_or_create_meta_message(
-        &self,
-        client_handle: &mut ClientHandle,
-        peer: &tl::enums::InputPeer,
-    ) -> (i32, MetaMessage) {
-        let meta_message = self.get_meta_message(&client_handle).await;
+    async fn get_or_create_meta_message(&mut self) -> (i32, MetaMessage) {
+        let meta_message = self.get_meta_message().await;
+
+        let client_handle = &mut self.client_handler;
+        let peer = TgConnection::get_peer();
+
         match meta_message {
             Some(data) => data,
             None => {
@@ -262,10 +266,10 @@ impl TgConnection {
                 };
                 let initial_message = TgConnection::make_meta_string_message(&meta_message);
                 client_handle
-                    .send_message(peer, initial_message.into())
+                    .send_message(&peer, initial_message.into())
                     .await
                     .unwrap();
-                self.get_meta_message(&client_handle).await.unwrap()
+                self.get_meta_message().await.unwrap()
             }
         }
     }
@@ -275,11 +279,9 @@ impl TgConnection {
         format!("{}\n{}", META_CONSTANT, info)
     }
 
-    #[tokio::main]
-    pub async fn cleanup(&self) {
-        let mut client_handle = self.get_connection().await;
-
-        let meta_message = self.get_meta_message(&client_handle).await;
+    pub async fn cleanup(&mut self) {
+        let meta_message = self.get_meta_message().await;
+        let client_handle = &mut self.client_handler;
         if let Some((id, message)) = meta_message {
             let mut messages_to_delete: Vec<i32> = message.files.values().cloned().collect();
             messages_to_delete.push(id);
@@ -290,7 +292,7 @@ impl TgConnection {
         }
     }
 
-    pub async fn get_and_inc_ino(&self) -> u64 {
+    pub async fn get_and_inc_ino(&mut self) -> u64 {
         let editor = |msg: &mut MetaMessage| {
             let next_ino = msg.next_ino;
             msg.next_ino = next_ino + 1;
@@ -299,7 +301,8 @@ impl TgConnection {
         self.edit_meta_message(&editor).await
     }
 
-    async fn get_meta_message(&self, client_handle: &ClientHandle) -> Option<(i32, MetaMessage)> {
+    async fn get_meta_message(&mut self) -> Option<(i32, MetaMessage)> {
+        let client_handle = &mut self.client_handler;
         let (id, text) = TgConnection::find_message_by_text(client_handle, &|msg| {
             msg.starts_with(META_CONSTANT)
         })
@@ -310,7 +313,7 @@ impl TgConnection {
     }
 
     async fn find_message_by_text(
-        client_handle: &ClientHandle,
+        client_handle: &mut ClientHandle,
         filter: &dyn Fn(&str) -> bool,
     ) -> Option<(i32, String)> {
         let peer = TgConnection::get_peer();
@@ -333,24 +336,5 @@ impl TgConnection {
         };
         let peer_into = peer.into();
         peer_into
-    }
-
-    async fn get_connection(&self) -> ClientHandle {
-        let mut client = Client::connect(Config {
-            session: Session::load_or_create("dialogs.session").unwrap(),
-            api_id: self.api_id,
-            api_hash: self.api_hash.clone(),
-            params: Default::default(),
-        })
-        .await
-        .unwrap();
-
-        if !client.is_authorized().await.unwrap() {
-            panic!("Panic")
-        }
-
-        let client_handle = client.handle();
-        task::spawn(async move { client.run_until_disconnected().await });
-        client_handle
     }
 }

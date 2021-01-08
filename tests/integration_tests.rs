@@ -8,10 +8,13 @@ use std::process::Command;
 use std::thread::sleep;
 
 use simple_logger::SimpleLogger;
+use tokio::task;
 use tokio::time::Duration;
 
-#[test]
-fn create_empty_file() {
+use fpfs::TgConnection;
+
+#[tokio::test(flavor = "multi_thread")]
+async fn create_empty_file() {
     SimpleLogger::new()
         .with_level(log::LevelFilter::Debug)
         .init()
@@ -23,8 +26,13 @@ fn create_empty_file() {
         .iter()
         .map(|o| o.as_ref())
         .collect::<Vec<&OsStr>>();
-    let filesystem = fpfs::Fpfs::new();
-    filesystem.remove_meta();
+
+    let (connection, client) = TgConnection::connect().await;
+
+    task::spawn(async move { client.run_until_disconnected().await });
+
+    let mut filesystem = fpfs::Fpfs::new(connection);
+    filesystem.remove_meta().await;
     let session = unsafe { fuse::spawn_mount(filesystem, &tmpfile, &options).unwrap() };
 
     sleep(Duration::from_secs(1));

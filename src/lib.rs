@@ -6,3 +6,4 @@ mod types;
 mod utils;
 
 pub use fpfs::Fpfs;
+pub use tg::TgConnection;

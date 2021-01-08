@@ -67,11 +67,7 @@ pub struct Fpfs {
 }
 
 impl Fpfs {
-    pub fn new() -> Fpfs {
-        let api_id: i32 = env!("TG_ID").parse().expect("TG_ID invalid");
-        let api_hash = env!("TG_HASH").to_string();
-
-        let connection = TgConnection::connect(api_id, api_hash);
+    pub fn new(connection: TgConnection) -> Fpfs {
         return Fpfs {
             connection,
             files_cache: None,
@@ -118,11 +114,11 @@ impl Fpfs {
     }
 
     #[allow(dead_code)]
-    pub fn remove_meta(&self) {
-        self.connection.cleanup();
+    pub async fn remove_meta(&mut self) {
+        self.connection.cleanup().await;
     }
 
-    fn next_ino(&self) -> u64 {
+    fn next_ino(&mut self) -> u64 {
         Runtime::new()
             .unwrap()
             .block_on(self.connection.get_and_inc_ino())
