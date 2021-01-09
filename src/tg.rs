@@ -38,12 +38,7 @@ impl TgConnection {
 
         let client_handler = client.handle();
 
-        return (
-            TgConnection {
-                client_handler,
-            },
-            client,
-        );
+        return (TgConnection { client_handler }, client);
     }
 
     #[tokio::main]
