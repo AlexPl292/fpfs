@@ -2,8 +2,8 @@ use std::ffi::OsStr;
 use std::io::Write;
 
 use fuse::{
-    FileAttr, FileType, Filesystem, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEntry,
-    ReplyOpen, ReplyWrite, Request,
+    FileAttr, FileType, Filesystem, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEmpty,
+    ReplyEntry, ReplyOpen, ReplyWrite, Request,
 };
 use libc::ENOENT;
 use tempfile::NamedTempFile;
@@ -85,6 +85,11 @@ impl Fpfs {
     }
 
     fn get_cur_cache_mut(&mut self) -> &mut Vec<FileLink> {
+        self.files_cache.as_mut().unwrap()
+    }
+
+    fn get_cache_mut(&mut self, directory: &u64) -> &mut Vec<FileLink> {
+        self.init_cache(directory);
         self.files_cache.as_mut().unwrap()
     }
 
@@ -195,6 +200,21 @@ impl Filesystem for Fpfs {
         }
 
         reply.entry(&TTL, &attr, 0);
+    }
+
+    fn unlink(&mut self, _req: &Request, parent: u64, name: &OsStr, reply: ReplyEmpty) {
+        let my_file_name = name.to_str().unwrap_or("~").to_string();
+        let cache = self.get_cache_mut(&parent);
+
+        let position = cache.iter().position(|x| x.name == my_file_name);
+        if let Some(idx) = position {
+            let data = cache.remove(idx);
+            let file_ino = data.attr.ino;
+            self.connection.remove_file(file_ino, parent);
+            reply.ok()
+        } else {
+            reply.error(ENOENT);
+        }
     }
 
     fn open(&mut self, _req: &Request, _ino: u64, flags: u32, reply: ReplyOpen) {

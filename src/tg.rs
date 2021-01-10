@@ -99,6 +99,30 @@ impl TgConnection {
         .await;
     }
 
+    async fn remove_child(&mut self, child: u64, parent: &u64) {
+        let peer_into = TgConnection::get_peer();
+
+        let (_, meta) = self.get_meta_message().await.unwrap();
+        let parent_id = meta.files.get(&parent).unwrap();
+
+        let mut client_handle = &mut self.client_handler;
+        let message = get_message(&mut client_handle, parent_id.clone()).await;
+        let mut dir_attrs: FileLink = serde_json::from_str(&message.text()).unwrap();
+        dir_attrs.children.retain(|x| x != &child);
+
+        let first_msg = serde_json::to_string_pretty(&dir_attrs).unwrap();
+        let second_msg = serde_json::to_string_pretty(&dir_attrs).unwrap();
+
+        edit_or_recreate(
+            message.id(),
+            first_msg.into(),
+            second_msg.into(),
+            &mut client_handle,
+            &peer_into,
+        )
+        .await;
+    }
+
     #[tokio::main]
     pub async fn create_dir(&mut self, name: &str, ino: u64, parent: Option<u64>, attr: &FileAttr) {
         self.do_create_dir(name, ino, parent, attr).await
@@ -294,6 +318,24 @@ impl TgConnection {
             next_ino
         };
         self.edit_meta_message(&editor).await
+    }
+
+    #[tokio::main]
+    pub async fn remove_file(&mut self, file_ino: u64, parent_ino: u64) {
+        let (_, message) = self.get_or_create_meta_message().await;
+
+        let file_message_id = message.files.get(&file_ino).unwrap();
+
+        let client_handle = &mut self.client_handler;
+        client_handle
+            .delete_messages(None, &vec![*file_message_id])
+            .await
+            .unwrap();
+
+        self.remove_child(file_ino, &parent_ino).await;
+
+        self.edit_meta_message(&|x: &mut MetaMessage| x.files.remove(&file_ino))
+            .await;
     }
 
     async fn get_meta_message(&mut self) -> Option<(i32, MetaMessage)> {

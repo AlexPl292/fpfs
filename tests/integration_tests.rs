@@ -54,6 +54,8 @@ async fn create_empty_file() {
 
     file_loop_with_dir(path, "my_dir", "another", 0, "123");
 
+    remove_loop(path, "another", 3);
+
     Command::new("umount")
         .arg(path.to_str().unwrap())
         .spawn()
@@ -84,6 +86,20 @@ fn file_loop(path: &Path, file_name: &str, amount_of_existing_files: usize, cont
     let result = String::from_utf8(bytes).unwrap();
 
     assert_eq!(content, result);
+}
+
+fn remove_loop(path: &Path, file_name: &str, amount_of_existing_files: usize) {
+    let another_path = format!("{}/{}", path.as_os_str().to_str().unwrap(), file_name);
+
+    fs::remove_file(&another_path).unwrap();
+
+    let file_list = fs::read_dir(path)
+        .unwrap()
+        .into_iter()
+        .map(|x| x.unwrap().path())
+        .collect::<Vec<PathBuf>>();
+
+    assert_eq!(file_list.len(), amount_of_existing_files - 1);
 }
 
 fn file_loop_with_dir(
