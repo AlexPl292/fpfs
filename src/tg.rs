@@ -8,6 +8,7 @@ use grammers_session::Session;
 use grammers_tl_types as tl;
 use tempfile::NamedTempFile;
 
+use crate::serialization::{from_str, to_string};
 use crate::tg_tools::{edit_or_recreate, get_message, last_message, resend_message};
 use crate::types::{FileLink, MetaMessage, VERSION};
 use crate::utils;
@@ -58,7 +59,7 @@ impl TgConnection {
 
         let new_file_link = FileLink::new_file(name.to_string(), attr.clone());
 
-        let attr_message = serde_json::to_string_pretty(&new_file_link).unwrap();
+        let attr_message = to_string(&new_file_link).unwrap();
         let message: InputMessage = attr_message.into();
         client_handle
             .send_message(&peer_into, message)
@@ -83,11 +84,11 @@ impl TgConnection {
 
         let mut client_handle = &mut self.client_handler;
         let message = get_message(&mut client_handle, parent_id.clone()).await;
-        let mut dir_attrs: FileLink = serde_json::from_str(&message.text()).unwrap();
+        let mut dir_attrs: FileLink = from_str(&message.text()).unwrap();
         dir_attrs.children.push(child);
 
-        let first_msg = serde_json::to_string_pretty(&dir_attrs).unwrap();
-        let second_msg = serde_json::to_string_pretty(&dir_attrs).unwrap();
+        let first_msg = to_string(&dir_attrs).unwrap();
+        let second_msg = to_string(&dir_attrs).unwrap();
 
         edit_or_recreate(
             message.id(),
@@ -107,11 +108,11 @@ impl TgConnection {
 
         let mut client_handle = &mut self.client_handler;
         let message = get_message(&mut client_handle, parent_id.clone()).await;
-        let mut dir_attrs: FileLink = serde_json::from_str(&message.text()).unwrap();
+        let mut dir_attrs: FileLink = from_str(&message.text()).unwrap();
         dir_attrs.children.retain(|x| x != &child);
 
-        let first_msg = serde_json::to_string_pretty(&dir_attrs).unwrap();
-        let second_msg = serde_json::to_string_pretty(&dir_attrs).unwrap();
+        let first_msg = to_string(&dir_attrs).unwrap();
+        let second_msg = to_string(&dir_attrs).unwrap();
 
         edit_or_recreate(
             message.id(),
@@ -134,7 +135,7 @@ impl TgConnection {
 
         let new_file_link = FileLink::new_dir(name.to_string(), vec![], attr.clone());
 
-        let attr_message = serde_json::to_string_pretty(&new_file_link).unwrap();
+        let attr_message = to_string(&new_file_link).unwrap();
         let message: InputMessage = attr_message.into();
         client_handle
             .send_message(&peer_into, message)
@@ -204,7 +205,7 @@ impl TgConnection {
 
         let directory_msg_id = text.files.get(parent).unwrap();
         let directory_msg = get_message(&mut client_handle, directory_msg_id.clone()).await;
-        let directory: FileLink = serde_json::from_str(directory_msg.text()).unwrap();
+        let directory: FileLink = from_str(directory_msg.text()).unwrap();
         let file_ids: Vec<i32> = directory
             .children
             .iter()
@@ -218,7 +219,7 @@ impl TgConnection {
             .iter()
             .filter_map(|x| match x {
                 None => None,
-                Some(t) => serde_json::from_str(t.text()).unwrap(),
+                Some(t) => from_str(t.text()).unwrap(),
             })
             .collect()
     }
@@ -230,7 +231,7 @@ impl TgConnection {
 
         let file_msg_id = text.files.get(ino)?;
         let message = get_message(&mut client_handle, file_msg_id.clone()).await;
-        serde_json::from_str(message.text()).ok()
+        from_str(message.text()).ok()
     }
 
     #[tokio::main]
@@ -250,13 +251,12 @@ impl TgConnection {
         let mut client_handle = &mut self.client_handler;
         let file_message = get_message(&mut client_handle, file_id.clone()).await;
 
-        let mut result: FileLink = serde_json::from_str(file_message.text()).unwrap();
+        let mut result: FileLink = from_str(file_message.text()).unwrap();
         let file = File::open(path).unwrap();
         result.attr.size = file.metadata().unwrap().len();
 
         // Update file message
-        let message =
-            InputMessage::text(serde_json::to_string_pretty(&result).unwrap()).file(res.clone());
+        let message = InputMessage::text(to_string(&result).unwrap()).file(res.clone());
 
         // TODO Actually we can just modify the existing message, but it's not supported by grammers yet
         let recreated_id =
@@ -294,7 +294,7 @@ impl TgConnection {
     }
 
     fn make_meta_string_message(meta: &MetaMessage) -> String {
-        let info = serde_json::to_string_pretty(&meta).unwrap();
+        let info = to_string(&meta).unwrap();
         format!("{}\n{}", META_CONSTANT, info)
     }
 
@@ -345,7 +345,7 @@ impl TgConnection {
         })
         .await?;
         let info = utils::crop_letters(text.as_str(), META_CONSTANT.len());
-        let info: MetaMessage = serde_json::from_str(info).ok()?;
+        let info: MetaMessage = from_str(info).ok()?;
         Some((id, info))
     }
 
