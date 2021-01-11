@@ -210,7 +210,22 @@ impl Filesystem for Fpfs {
         if let Some(idx) = position {
             let data = cache.remove(idx);
             let file_ino = data.attr.ino;
-            self.connection.remove_file(file_ino, parent);
+            self.connection.remove_inode(file_ino, parent);
+            reply.ok()
+        } else {
+            reply.error(ENOENT);
+        }
+    }
+
+    fn rmdir(&mut self, _req: &Request, parent: u64, name: &OsStr, reply: ReplyEmpty) {
+        let my_file_name = name.to_str().unwrap_or("~").to_string();
+        let cache = self.get_cache_mut(&parent);
+
+        let position = cache.iter().position(|x| x.name == my_file_name);
+        if let Some(idx) = position {
+            let data = cache.remove(idx);
+            let file_ino = data.attr.ino;
+            self.connection.remove_inode(file_ino, parent);
             reply.ok()
         } else {
             reply.error(ENOENT);

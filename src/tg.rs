@@ -321,7 +321,7 @@ impl TgConnection {
     }
 
     #[tokio::main]
-    pub async fn remove_file(&mut self, file_ino: u64, parent_ino: u64) {
+    pub async fn remove_inode(&mut self, file_ino: u64, parent_ino: u64) {
         let (_, message) = self.get_or_create_meta_message().await;
 
         let file_message_id = message.files.get(&file_ino).unwrap();
