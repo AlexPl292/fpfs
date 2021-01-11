@@ -2,7 +2,7 @@ use std::ffi::OsStr;
 use std::io::Write;
 
 use fuse::{
-    FileAttr, FileType, Filesystem, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEmpty,
+    FileAttr, Filesystem, FileType, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEmpty,
     ReplyEntry, ReplyOpen, ReplyWrite, Request,
 };
 use libc::ENOENT;
@@ -80,11 +80,15 @@ impl Fpfs {
         self.files_cache.as_ref().unwrap()
     }
 
-    fn get_cur_cache(&self) -> &Vec<FileLink> {
+    fn get_cur_cache(&mut self) -> &Vec<FileLink> {
+        let ino = self.cache_ino;
+        self.init_cache(&ino);
         self.files_cache.as_ref().unwrap()
     }
 
     fn get_cur_cache_mut(&mut self) -> &mut Vec<FileLink> {
+        let ino = self.cache_ino;
+        self.init_cache(&ino);
         self.files_cache.as_mut().unwrap()
     }
 
@@ -226,6 +230,33 @@ impl Filesystem for Fpfs {
             let data = cache.remove(idx);
             let file_ino = data.attr.ino;
             self.connection.remove_inode(file_ino, parent);
+            reply.ok()
+        } else {
+            reply.error(ENOENT);
+        }
+    }
+
+    fn rename(
+        &mut self,
+        _req: &Request,
+        parent: u64,
+        name: &OsStr,
+        newparent: u64,
+        newname: &OsStr,
+        reply: ReplyEmpty,
+    ) {
+        // TODO Rename directories only!!
+
+        let my_file_name = name.to_str().unwrap_or("~").to_string();
+        let cache = self.get_cache_mut(&parent);
+
+        let position = cache.iter().position(|x| x.name == my_file_name);
+        if let Some(idx) = position {
+            let data = cache.remove(idx);
+            self.files_cache = None;
+            let file_ino = data.attr.ino;
+            self.connection
+                .rename(file_ino, newname.to_str().unwrap(), parent, newparent);
             reply.ok()
         } else {
             reply.error(ENOENT);

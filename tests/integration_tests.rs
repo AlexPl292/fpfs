@@ -56,7 +56,11 @@ async fn create_empty_file() {
 
     remove_loop(path, "another", 3);
 
-    remove_dir_loop(path, "my_dir", 2);
+    let dir_path = format!("{}/{}", path.as_os_str().to_str().unwrap(), "my_dir");
+    let another_dir_path = format!("{}/{}", path.as_os_str().to_str().unwrap(), "my_another_dir");
+    rename_loop(path, &dir_path.as_str(), &another_dir_path.as_str());
+
+    remove_dir_loop(path, "my_another_dir", 2);
 
     Command::new("umount")
         .arg(path.to_str().unwrap())
@@ -64,6 +68,30 @@ async fn create_empty_file() {
         .unwrap();
 
     std::mem::drop(session);
+}
+
+fn rename_loop(path: &Path, dir_path: &str, another_path: &str) {
+    let before_size = fs::read_dir(path)
+        .unwrap()
+        .into_iter()
+        .map(|x| x.unwrap().path())
+        .collect::<Vec<PathBuf>>().len();
+
+
+    fs::rename(dir_path, another_path).unwrap();
+
+    let file_list = fs::read_dir(path)
+        .unwrap()
+        .into_iter()
+        .map(|x| x.unwrap().path())
+        .collect::<Vec<PathBuf>>();
+
+    assert_eq!(before_size, file_list.len());
+
+    assert!(file_list
+        .iter()
+        .map(|x| x.to_str().unwrap())
+        .any(|x| x == another_path));
 }
 
 fn file_loop(path: &Path, file_name: &str, amount_of_existing_files: usize, content: &str) {

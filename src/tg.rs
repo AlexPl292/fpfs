@@ -124,9 +124,44 @@ impl TgConnection {
         .await;
     }
 
+    async fn rename_dir(&mut self, inode: u64, new_name: &str) {
+        let peer_into = TgConnection::get_peer();
+
+        let (_, meta) = self.get_meta_message().await.unwrap();
+        let parent_id = meta.files.get(&inode).unwrap();
+
+        let mut client_handle = &mut self.client_handler;
+        let message = get_message(&mut client_handle, parent_id.clone()).await;
+        let mut dir_attrs: FileLink = from_str(&message.text()).unwrap();
+        dir_attrs.name = new_name.to_string();
+
+        let first_msg = to_string(&dir_attrs).unwrap();
+        let second_msg = to_string(&dir_attrs).unwrap();
+
+        edit_or_recreate(
+            message.id(),
+            first_msg.into(),
+            second_msg.into(),
+            &mut client_handle,
+            &peer_into,
+        )
+        .await;
+    }
+
     #[tokio::main]
     pub async fn create_dir(&mut self, name: &str, ino: u64, parent: Option<u64>, attr: &FileAttr) {
         self.do_create_dir(name, ino, parent, attr).await
+    }
+
+    #[tokio::main]
+    pub async fn rename(&mut self, ino: u64, new_name: &str, parent: u64, new_parent: u64) {
+        // TODO support dir rename only
+        //  How to reupload file content?
+
+        self.rename_dir(ino, new_name).await;
+
+        self.remove_child(ino, &parent).await;
+        self.add_child(ino, &new_parent).await;
     }
 
     async fn do_create_dir(&mut self, name: &str, ino: u64, parent: Option<u64>, attr: &FileAttr) {
