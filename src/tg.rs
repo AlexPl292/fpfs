@@ -124,7 +124,7 @@ impl TgConnection {
         .await;
     }
 
-    async fn rename_file(&mut self, inode: u64, new_name: &str) {
+    async fn update_file(&mut self, inode: u64, updater: &dyn Fn(&mut FileLink) -> ()) {
         let peer_into = TgConnection::get_peer();
 
         let (_, meta) = self.get_meta_message().await.unwrap();
@@ -133,7 +133,8 @@ impl TgConnection {
         let mut client_handle = &mut self.client_handler;
         let message = get_message(&mut client_handle, parent_id.clone()).await;
         let mut dir_attrs: FileLink = from_str(&message.text()).unwrap();
-        dir_attrs.name = new_name.to_string();
+
+        updater(&mut dir_attrs);
 
         let first_msg = to_string(&dir_attrs).unwrap();
         let second_msg = to_string(&dir_attrs).unwrap();
@@ -169,7 +170,8 @@ impl TgConnection {
 
     #[tokio::main]
     pub async fn rename(&mut self, ino: u64, new_name: &str, parent: u64, new_parent: u64) {
-        self.rename_file(ino, new_name).await;
+        let updater = |file: &mut FileLink| file.name = new_name.to_string();
+        self.update_file(ino, &updater).await;
 
         self.remove_child(ino, &parent).await;
         self.add_child(ino, &new_parent).await;
