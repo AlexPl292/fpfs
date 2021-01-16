@@ -132,6 +132,17 @@ impl Fpfs {
             .unwrap()
             .block_on(self.connection.get_and_inc_ino())
     }
+
+    fn get_ino(&mut self, ino: u64) -> Option<FileLink> {
+        let attr = self.get_cur_cache().iter().find(|x| x.attr.ino == ino);
+        if let Some(data) = attr {
+            Some(data.clone())
+        } else {
+            Runtime::new()
+                .unwrap()
+                .block_on(self.connection.get_file_attr(&ino))
+        }
+    }
 }
 
 impl Filesystem for Fpfs {
@@ -155,18 +166,11 @@ impl Filesystem for Fpfs {
     }
 
     fn getattr(&mut self, _req: &Request, ino: u64, reply: ReplyAttr) {
-        let attr = self.get_cur_cache().iter().find(|x| x.attr.ino == ino);
+        let attr = self.get_ino(ino);
         if let Some(data) = attr {
             reply.attr(&TTL, &data.attr)
         } else {
-            let attr = Runtime::new()
-                .unwrap()
-                .block_on(self.connection.get_file_attr(&ino));
-            if let Some(data) = attr {
-                reply.attr(&TTL, &data.attr)
-            } else {
-                reply.error(ENOENT)
-            }
+            reply.error(ENOENT)
         }
     }
 
