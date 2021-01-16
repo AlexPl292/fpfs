@@ -208,6 +208,7 @@ impl Filesystem for Fpfs {
             attrbts.crtime = crtime.unwrap_or(attrbts.crtime);
             attrbts.flags = flags.unwrap_or(attrbts.flags);
 
+            // FIXME update cache
             self.connection.set_attr(ino, attrbts.clone());
 
             reply.attr(&TTL, &attrbts)
