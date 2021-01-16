@@ -2,7 +2,7 @@ use std::ffi::OsStr;
 use std::io::Write;
 
 use fuse::{
-    FileAttr, Filesystem, FileType, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEmpty,
+    FileAttr, FileType, Filesystem, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEmpty,
     ReplyEntry, ReplyOpen, ReplyWrite, Request,
 };
 use libc::ENOENT;
@@ -245,8 +245,6 @@ impl Filesystem for Fpfs {
         newname: &OsStr,
         reply: ReplyEmpty,
     ) {
-        // TODO Rename directories only!!
-
         let my_file_name = name.to_str().unwrap_or("~").to_string();
         let cache = self.get_cache_mut(&parent);
 

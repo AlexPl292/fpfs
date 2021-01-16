@@ -47,6 +47,11 @@ async fn create_empty_file() {
     assert!(file_list.is_empty());
 
     file_loop(path, "another", 0, "123");
+
+    let dir_path = format!("{}/{}", path.as_os_str().to_str().unwrap(), "another");
+    let another_dir_path = format!("{}/{}", path.as_os_str().to_str().unwrap(), "another2");
+    rename_loop(path, &dir_path.as_str(), &another_dir_path.as_str());
+
     file_loop(path, "another_one_file", 1, "456");
 
     let dir_path = format!("{}/{}", path.as_os_str().to_str().unwrap(), "my_dir");
@@ -54,10 +59,14 @@ async fn create_empty_file() {
 
     file_loop_with_dir(path, "my_dir", "another", 0, "123");
 
-    remove_loop(path, "another", 3);
+    remove_loop(path, "another_one_file", 3);
 
     let dir_path = format!("{}/{}", path.as_os_str().to_str().unwrap(), "my_dir");
-    let another_dir_path = format!("{}/{}", path.as_os_str().to_str().unwrap(), "my_another_dir");
+    let another_dir_path = format!(
+        "{}/{}",
+        path.as_os_str().to_str().unwrap(),
+        "my_another_dir"
+    );
     rename_loop(path, &dir_path.as_str(), &another_dir_path.as_str());
 
     remove_dir_loop(path, "my_another_dir", 2);
@@ -75,8 +84,8 @@ fn rename_loop(path: &Path, dir_path: &str, another_path: &str) {
         .unwrap()
         .into_iter()
         .map(|x| x.unwrap().path())
-        .collect::<Vec<PathBuf>>().len();
-
+        .collect::<Vec<PathBuf>>()
+        .len();
 
     fs::rename(dir_path, another_path).unwrap();
 

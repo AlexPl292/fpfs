@@ -124,7 +124,7 @@ impl TgConnection {
         .await;
     }
 
-    async fn rename_dir(&mut self, inode: u64, new_name: &str) {
+    async fn rename_file(&mut self, inode: u64, new_name: &str) {
         let peer_into = TgConnection::get_peer();
 
         let (_, meta) = self.get_meta_message().await.unwrap();
@@ -138,14 +138,28 @@ impl TgConnection {
         let first_msg = to_string(&dir_attrs).unwrap();
         let second_msg = to_string(&dir_attrs).unwrap();
 
-        edit_or_recreate(
-            message.id(),
-            first_msg.into(),
-            second_msg.into(),
-            &mut client_handle,
-            &peer_into,
-        )
-        .await;
+        if let Some(data) = dir_attrs.file {
+            let first_full_msg = InputMessage::from(first_msg).file(data.clone().into());
+            let second_msg_full = InputMessage::from(second_msg).file(data.into());
+
+            edit_or_recreate(
+                message.id(),
+                first_full_msg,
+                second_msg_full,
+                &mut client_handle,
+                &peer_into,
+            )
+            .await;
+        } else {
+            edit_or_recreate(
+                message.id(),
+                first_msg.into(),
+                second_msg.into(),
+                &mut client_handle,
+                &peer_into,
+            )
+            .await;
+        }
     }
 
     #[tokio::main]
@@ -155,10 +169,7 @@ impl TgConnection {
 
     #[tokio::main]
     pub async fn rename(&mut self, ino: u64, new_name: &str, parent: u64, new_parent: u64) {
-        // TODO support dir rename only
-        //  How to reupload file content?
-
-        self.rename_dir(ino, new_name).await;
+        self.rename_file(ino, new_name).await;
 
         self.remove_child(ino, &parent).await;
         self.add_child(ino, &new_parent).await;
@@ -289,6 +300,7 @@ impl TgConnection {
         let mut result: FileLink = from_str(file_message.text()).unwrap();
         let file = File::open(path).unwrap();
         result.attr.size = file.metadata().unwrap().len();
+        result.file = Some(res.clone().into());
 
         // Update file message
         let message = InputMessage::text(to_string(&result).unwrap()).file(res.clone());
