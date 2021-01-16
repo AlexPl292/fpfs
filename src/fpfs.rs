@@ -6,7 +6,7 @@ use fuse::{
     ReplyEmpty, ReplyEntry, ReplyLock, ReplyOpen, ReplyStatfs, ReplyWrite, ReplyXTimes, ReplyXattr,
     Request,
 };
-use libc::ENOENT;
+use libc::{ENOENT, ENOSYS, ERANGE};
 use tempfile::NamedTempFile;
 use time::Timespec;
 use tokio::runtime::Runtime;
@@ -447,33 +447,71 @@ impl Filesystem for Fpfs {
     fn setxattr(
         &mut self,
         _req: &Request,
-        _ino: u64,
-        _name: &OsStr,
-        _value: &[u8],
+        ino: u64,
+        name: &OsStr,
+        value: &[u8],
         _flags: u32,
         _position: u32,
         reply: ReplyEmpty,
     ) {
-        reply.error(ENOSYS);
+        let name = name.to_str().unwrap().to_string();
+        let vec = value.to_vec();
+        self.connection.set_xattr(ino, name.clone(), vec.clone());
+        self.get_cur_cache_mut().iter_mut().for_each(|x| {
+            if x.attr.ino == ino {
+                x.xattr.insert(name.clone(), vec.clone());
+            }
+        });
+        reply.ok();
     }
 
-    fn getxattr(
-        &mut self,
-        _req: &Request,
-        _ino: u64,
-        _name: &OsStr,
-        _size: u32,
-        reply: ReplyXattr,
-    ) {
-        reply.error(ENOSYS);
+    fn getxattr(&mut self, _req: &Request, ino: u64, name: &OsStr, size: u32, reply: ReplyXattr) {
+        let file_link = self.get_ino(ino);
+        if let Some(data) = file_link {
+            let attr_name = name.to_str().unwrap().to_string();
+            let attr_value = data.xattr.get(&attr_name);
+            let attr_size = attr_value.map(|x| x.len()).unwrap_or(0) as u32;
+            if size == 0 {
+                reply.size(attr_size as u32);
+            } else if size >= attr_size {
+                reply.data(attr_value.unwrap_or(&vec![]));
+            } else {
+                reply.error(ERANGE)
+            }
+        } else {
+            reply.error(ENOSYS);
+        }
     }
 
-    fn listxattr(&mut self, _req: &Request, _ino: u64, _size: u32, reply: ReplyXattr) {
-        reply.error(ENOSYS);
+    fn listxattr(&mut self, _req: &Request, ino: u64, size: u32, reply: ReplyXattr) {
+        let file_link = self.get_ino(ino);
+
+        if let Some(data) = file_link {
+            let names: Vec<String> = data.xattr.keys().map(|x| x.to_string()).collect();
+            let name_string: String = names.join("\0");
+            let attr_size = name_string.len() as u32;
+            if size == 0 {
+                reply.size(attr_size);
+            } else if size >= attr_size {
+                reply.data(name_string.as_bytes());
+            } else {
+                reply.error(ERANGE);
+            }
+        } else {
+            reply.error(ENOSYS);
+        }
     }
 
-    fn removexattr(&mut self, _req: &Request, _ino: u64, _name: &OsStr, reply: ReplyEmpty) {
-        reply.error(ENOSYS);
+    fn removexattr(&mut self, _req: &Request, ino: u64, name: &OsStr, reply: ReplyEmpty) {
+        let attr_name = name.to_str().unwrap().to_string();
+        self.connection.remove_xattr(ino, attr_name.clone());
+
+        self.get_cur_cache_mut().iter_mut().for_each(|x| {
+            if x.attr.ino == ino {
+                x.xattr.remove(attr_name.as_str());
+            }
+        });
+        reply.ok();
     }
 
     fn access(&mut self, _req: &Request, _ino: u64, _mask: u32, reply: ReplyEmpty) {

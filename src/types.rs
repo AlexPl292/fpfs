@@ -20,6 +20,7 @@ pub struct FileLink {
     pub name: String,
     pub children: Vec<u64>,
     pub file: Option<FpfsInputFile>,
+    pub xattr: HashMap<String, Vec<u8>>,
 
     #[serde(with = "FileAttrDef")]
     pub attr: FileAttr,
@@ -31,6 +32,7 @@ impl FileLink {
             name,
             children: vec![],
             file: None,
+            xattr: HashMap::new(),
             attr,
         }
     }
@@ -40,6 +42,7 @@ impl FileLink {
             name,
             children,
             file: None,
+            xattr: HashMap::new(),
             attr,
         }
     }

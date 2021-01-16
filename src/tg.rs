@@ -175,6 +175,22 @@ impl TgConnection {
     }
 
     #[tokio::main]
+    pub async fn set_xattr(&mut self, ino: u64, name: String, data: Vec<u8>) {
+        self.update_file(ino, &|file: &mut FileLink| {
+            file.xattr.insert(name.clone(), data.clone());
+        })
+        .await;
+    }
+
+    #[tokio::main]
+    pub async fn remove_xattr(&mut self, ino: u64, name: String) {
+        self.update_file(ino, &|file: &mut FileLink| {
+            file.xattr.remove(name.as_str());
+        })
+        .await;
+    }
+
+    #[tokio::main]
     pub async fn rename(&mut self, ino: u64, new_name: &str, parent: u64, new_parent: u64) {
         let updater = |file: &mut FileLink| file.name = new_name.to_string();
         self.update_file(ino, &updater).await;
