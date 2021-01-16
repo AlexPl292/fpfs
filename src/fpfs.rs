@@ -2,8 +2,9 @@ use std::ffi::OsStr;
 use std::io::Write;
 
 use fuse::{
-    FileAttr, FileType, Filesystem, ReplyAttr, ReplyCreate, ReplyData, ReplyDirectory, ReplyEmpty,
-    ReplyEntry, ReplyOpen, ReplyWrite, Request,
+    FileAttr, FileType, Filesystem, ReplyAttr, ReplyBmap, ReplyCreate, ReplyData, ReplyDirectory,
+    ReplyEmpty, ReplyEntry, ReplyLock, ReplyOpen, ReplyStatfs, ReplyWrite, ReplyXTimes, ReplyXattr,
+    Request,
 };
 use libc::ENOENT;
 use tempfile::NamedTempFile;
@@ -12,6 +13,7 @@ use tokio::runtime::Runtime;
 
 use crate::tg::TgConnection;
 use crate::types::FileLink;
+use std::path::Path;
 
 /// Some readings:
 /// CS135 FUSE Documentation:
@@ -152,6 +154,8 @@ impl Filesystem for Fpfs {
         Ok(())
     }
 
+    fn destroy(&mut self, _req: &Request) {}
+
     fn lookup(&mut self, _req: &Request, parent: u64, name: &OsStr, reply: ReplyEntry) {
         let my_file_name = name.to_str().unwrap_or("~").to_string();
         let found_file = self
@@ -164,6 +168,8 @@ impl Filesystem for Fpfs {
             reply.error(ENOENT);
         }
     }
+
+    fn forget(&mut self, _req: &Request, _ino: u64, _nlookup: u64) {}
 
     fn getattr(&mut self, _req: &Request, ino: u64, reply: ReplyAttr) {
         let attr = self.get_ino(ino);
@@ -208,6 +214,22 @@ impl Filesystem for Fpfs {
         } else {
             reply.error(ENOENT)
         }
+    }
+
+    fn readlink(&mut self, _req: &Request, _ino: u64, reply: ReplyData) {
+        reply.error(ENOSYS);
+    }
+
+    fn mknod(
+        &mut self,
+        _req: &Request,
+        _parent: u64,
+        _name: &OsStr,
+        _mode: u32,
+        _rdev: u32,
+        reply: ReplyEntry,
+    ) {
+        reply.error(ENOSYS);
     }
 
     fn mkdir(&mut self, _req: &Request, parent: u64, name: &OsStr, _mode: u32, reply: ReplyEntry) {
@@ -256,6 +278,17 @@ impl Filesystem for Fpfs {
         }
     }
 
+    fn symlink(
+        &mut self,
+        _req: &Request,
+        _parent: u64,
+        _name: &OsStr,
+        _link: &Path,
+        reply: ReplyEntry,
+    ) {
+        reply.error(ENOSYS);
+    }
+
     fn rename(
         &mut self,
         _req: &Request,
@@ -279,6 +312,17 @@ impl Filesystem for Fpfs {
         } else {
             reply.error(ENOENT);
         }
+    }
+
+    fn link(
+        &mut self,
+        _req: &Request,
+        _ino: u64,
+        _newparent: u64,
+        _newname: &OsStr,
+        reply: ReplyEntry,
+    ) {
+        reply.error(ENOSYS);
     }
 
     fn open(&mut self, _req: &Request, _ino: u64, flags: u32, reply: ReplyOpen) {
@@ -330,6 +374,27 @@ impl Filesystem for Fpfs {
         reply.written(data.len() as u32)
     }
 
+    fn flush(&mut self, _req: &Request, _ino: u64, _fh: u64, _lock_owner: u64, reply: ReplyEmpty) {
+        reply.error(ENOSYS);
+    }
+
+    fn release(
+        &mut self,
+        _req: &Request,
+        _ino: u64,
+        _fh: u64,
+        _flags: u32,
+        _lock_owner: u64,
+        _flush: bool,
+        reply: ReplyEmpty,
+    ) {
+        reply.ok();
+    }
+
+    fn fsync(&mut self, _req: &Request, _ino: u64, _fh: u64, _datasync: bool, reply: ReplyEmpty) {
+        reply.error(ENOSYS);
+    }
+
     fn opendir(&mut self, _req: &Request, ino: u64, flags: u32, reply: ReplyOpen) {
         self.init_cache(&ino);
         reply.opened(0, flags);
@@ -359,6 +424,61 @@ impl Filesystem for Fpfs {
         reply.ok();
     }
 
+    fn releasedir(&mut self, _req: &Request, _ino: u64, _fh: u64, _flags: u32, reply: ReplyEmpty) {
+        reply.ok();
+    }
+
+    fn fsyncdir(
+        &mut self,
+        _req: &Request,
+        _ino: u64,
+        _fh: u64,
+        _datasync: bool,
+        reply: ReplyEmpty,
+    ) {
+        reply.error(ENOSYS);
+    }
+
+    fn statfs(&mut self, _req: &Request, _ino: u64, reply: ReplyStatfs) {
+        reply.statfs(0, 0, 0, 0, 0, 512, 255, 0);
+    }
+
+    fn setxattr(
+        &mut self,
+        _req: &Request,
+        _ino: u64,
+        _name: &OsStr,
+        _value: &[u8],
+        _flags: u32,
+        _position: u32,
+        reply: ReplyEmpty,
+    ) {
+        reply.error(ENOSYS);
+    }
+
+    fn getxattr(
+        &mut self,
+        _req: &Request,
+        _ino: u64,
+        _name: &OsStr,
+        _size: u32,
+        reply: ReplyXattr,
+    ) {
+        reply.error(ENOSYS);
+    }
+
+    fn listxattr(&mut self, _req: &Request, _ino: u64, _size: u32, reply: ReplyXattr) {
+        reply.error(ENOSYS);
+    }
+
+    fn removexattr(&mut self, _req: &Request, _ino: u64, _name: &OsStr, reply: ReplyEmpty) {
+        reply.error(ENOSYS);
+    }
+
+    fn access(&mut self, _req: &Request, _ino: u64, _mask: u32, reply: ReplyEmpty) {
+        reply.error(ENOSYS);
+    }
+
     fn create(
         &mut self,
         _req: &Request,
@@ -381,6 +501,62 @@ impl Filesystem for Fpfs {
         }
 
         reply.created(&TTL, &attr, 0, 0, flags);
+    }
+
+    fn getlk(
+        &mut self,
+        _req: &Request,
+        _ino: u64,
+        _fh: u64,
+        _lock_owner: u64,
+        _start: u64,
+        _end: u64,
+        _typ: u32,
+        _pid: u32,
+        reply: ReplyLock,
+    ) {
+        reply.error(ENOSYS);
+    }
+
+    fn setlk(
+        &mut self,
+        _req: &Request,
+        _ino: u64,
+        _fh: u64,
+        _lock_owner: u64,
+        _start: u64,
+        _end: u64,
+        _typ: u32,
+        _pid: u32,
+        _sleep: bool,
+        reply: ReplyEmpty,
+    ) {
+        reply.error(ENOSYS);
+    }
+
+    fn bmap(&mut self, _req: &Request, _ino: u64, _blocksize: u32, _idx: u64, reply: ReplyBmap) {
+        reply.error(ENOSYS);
+    }
+
+    fn setvolname(&mut self, _req: &Request, _name: &OsStr, reply: ReplyEmpty) {
+        reply.error(ENOSYS);
+    }
+
+    fn exchange(
+        &mut self,
+        _req: &Request,
+        _parent: u64,
+        _name: &OsStr,
+        _newparent: u64,
+        _newname: &OsStr,
+        _options: u64,
+        reply: ReplyEmpty,
+    ) {
+        reply.error(ENOSYS);
+    }
+
+    fn getxtimes(&mut self, _req: &Request, _ino: u64, reply: ReplyXTimes) {
+        reply.error(ENOSYS);
     }
 }
 
