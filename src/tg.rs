@@ -169,6 +169,12 @@ impl TgConnection {
     }
 
     #[tokio::main]
+    pub async fn set_attr(&mut self, ino: u64, attr: FileAttr) {
+        self.update_file(ino, &|file: &mut FileLink| file.attr = attr).await;
+    }
+
+
+    #[tokio::main]
     pub async fn rename(&mut self, ino: u64, new_name: &str, parent: u64, new_parent: u64) {
         let updater = |file: &mut FileLink| file.name = new_name.to_string();
         self.update_file(ino, &updater).await;

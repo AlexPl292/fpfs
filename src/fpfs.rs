@@ -177,21 +177,37 @@ impl Filesystem for Fpfs {
     fn setattr(
         &mut self,
         _req: &Request,
-        _ino: u64,
+        ino: u64,
         _mode: Option<u32>,
-        _uid: Option<u32>,
-        _gid: Option<u32>,
-        _size: Option<u64>,
-        _atime: Option<Timespec>,
-        _mtime: Option<Timespec>,
+        uid: Option<u32>,
+        gid: Option<u32>,
+        size: Option<u64>,
+        atime: Option<Timespec>,
+        mtime: Option<Timespec>,
         _fh: Option<u64>,
-        _crtime: Option<Timespec>,
+        crtime: Option<Timespec>,
         _chgtime: Option<Timespec>,
         _bkuptime: Option<Timespec>,
-        _flags: Option<u32>,
+        flags: Option<u32>,
         reply: ReplyAttr,
     ) {
-        reply.attr(&TTL, &HELLO_TXT_ATTR);
+        let attr = self.get_ino(ino);
+        if let Some(data) = attr {
+            let mut attrbts = data.attr;
+            attrbts.uid = uid.unwrap_or(attrbts.uid);
+            attrbts.gid = gid.unwrap_or(attrbts.gid);
+            attrbts.size = size.unwrap_or(attrbts.size);
+            attrbts.atime = atime.unwrap_or(attrbts.atime);
+            attrbts.mtime = mtime.unwrap_or(attrbts.mtime);
+            attrbts.crtime = crtime.unwrap_or(attrbts.crtime);
+            attrbts.flags = flags.unwrap_or(attrbts.flags);
+
+            self.connection.set_attr(ino, attrbts.clone());
+
+            reply.attr(&TTL, &attrbts)
+        } else {
+            reply.error(ENOENT)
+        }
     }
 
     fn mkdir(&mut self, _req: &Request, parent: u64, name: &OsStr, _mode: u32, reply: ReplyEntry) {
