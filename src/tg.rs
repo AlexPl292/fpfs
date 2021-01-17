@@ -25,7 +25,7 @@ impl TgConnection {
         let api_hash = env!("TG_HASH").to_string();
 
         let mut client = Client::connect(Config {
-            session: Session::load_or_create("dialogs.session").unwrap(),
+            session: Session::load_or_create("fpfs.session").unwrap(),
             api_id,
             api_hash: api_hash.clone(),
             params: Default::default(),
