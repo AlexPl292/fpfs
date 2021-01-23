@@ -15,20 +15,25 @@ mod types;
 mod utils;
 
 fn main() {
+    Runtime::new().unwrap().block_on(start());
+}
+
+async fn start() {
     SimpleLogger::new()
         .with_level(log::LevelFilter::Debug)
         .init()
         .unwrap();
 
-    let mountpoint = "/Users/alex.plate/Downloads/test75";
+    let mountpoint = "/Users/alex.plate/Downloads/test101";
 
-    let (connection, client) = Runtime::new().unwrap().block_on(TgConnection::connect());
+    let (connection, client) = TgConnection::connect().await;
 
     let options = ["-f", "-o", "fsname=fpfs"]
         .iter()
         .map(|o| o.as_ref())
         .collect::<Vec<&OsStr>>();
-    fuse::mount(fpfs::Fpfs::new(connection), &mountpoint, &options).unwrap();
 
     task::spawn(async move { client.run_until_disconnected().await });
+
+    unsafe { fuse::spawn_mount(fpfs::Fpfs::new(connection), &mountpoint, &options).unwrap(); }
 }
