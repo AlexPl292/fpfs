@@ -5,6 +5,7 @@ use log;
 use simple_logger::SimpleLogger;
 use tokio::runtime::Runtime;
 use tokio::task;
+use std::env;
 
 mod external_serialization;
 mod fpfs;
@@ -24,7 +25,9 @@ async fn start() {
         .init()
         .unwrap();
 
-    let mountpoint = "/Users/alex.plate/Downloads/test101";
+    let args: Vec<String> = env::args().collect();
+
+    let mountpoint = args.last().unwrap();
 
     let (connection, client) = TgConnection::connect().await;
 
