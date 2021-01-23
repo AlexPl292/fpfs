@@ -3,9 +3,9 @@ use std::ffi::OsStr;
 use crate::tg::TgConnection;
 use log;
 use simple_logger::SimpleLogger;
+use std::env;
 use tokio::runtime::Runtime;
 use tokio::task;
-use std::env;
 
 mod external_serialization;
 mod fpfs;
@@ -38,5 +38,7 @@ async fn start() {
 
     task::spawn(async move { client.run_until_disconnected().await });
 
-    unsafe { fuse::spawn_mount(fpfs::Fpfs::new(connection), &mountpoint, &options).unwrap(); }
+    unsafe {
+        fuse::spawn_mount(fpfs::Fpfs::new(connection), &mountpoint, &options).unwrap();
+    }
 }

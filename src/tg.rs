@@ -439,7 +439,9 @@ impl TgConnection {
 
     fn get_peer() -> tl::enums::InputPeer {
         let user_id: i32 = env!("TG_USER_ID").parse().expect("TG_USER_ID invalid");
-        let access_hash: i64 = env!("TG_ACCESS_HASH").parse().expect("TG_ACCESS_HASH invalid");
+        let access_hash: i64 = env!("TG_ACCESS_HASH")
+            .parse()
+            .expect("TG_ACCESS_HASH invalid");
 
         let peer = tl::types::InputPeerUser {
             user_id,
