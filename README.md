@@ -10,7 +10,7 @@ FUSE filesystem based on telegram.
     - **TG_HASH** - Get this from the previous step
     - **TG_USER_ID** - Your user ID
     - **TG_ACCESS_HASH** - Telegram access hash
-- Obtain a session file:
+- Obtain a session file:  
     Now the tricky part. At the moment this library doesn't support user authentication.
     So please:
     - Load grammers project: https://github.com/Lonami/grammers
